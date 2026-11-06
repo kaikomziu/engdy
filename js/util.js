@@ -33,11 +33,28 @@ export function toast(msg, ms = 2400) {
 }
 
 // モーダル。html を入れて、閉じたら resolve
+let modalClose = null, modalIgnore = false;
+addEventListener("popstate", (e) => {
+  if (modalIgnore) { modalIgnore = false; e.stopImmediatePropagation(); return; }
+  if (modalClose) { modalClose(null); e.stopImmediatePropagation(); return; }
+  // 閉じたあとに残った古い履歴は飛ばす
+  if (e.state && e.state.modal) { e.stopImmediatePropagation(); history.back(); }
+});
+export const modalOpen = () => !!modalClose;
 export function modal(html, setup) {
   return new Promise((resolve) => {
     const m = $("#modal"), c = $("#modalCard");
     c.innerHTML = html; m.hidden = false;
-    const close = (v) => { m.hidden = true; c.innerHTML = ""; m.onclick = null; document.removeEventListener("keydown", onKey); resolve(v); };
+    // スマホの「戻る」でモーダルだけ閉じられるように、履歴を1つ積む
+    try { history.pushState({ ...(history.state || {}), modal: 1 }, ""); } catch (e) {}
+    modalClose = (v) => close(v, true);
+    const close = (v, fromPop) => {
+      if (m.hidden) return;
+      m.hidden = true; c.innerHTML = ""; m.onclick = null; modalClose = null;
+      document.removeEventListener("keydown", onKey);
+      if (!fromPop) setTimeout(() => { if (!modalClose && history.state && history.state.modal) { modalIgnore = true; history.back(); } }, 0);
+      resolve(v);
+    };
     const onKey = (e) => { if (e.key === "Escape") close(null); };
     document.addEventListener("keydown", onKey);
     m.onclick = (e) => { if (e.target === m || e.target.closest("[data-close]")) close(null); };

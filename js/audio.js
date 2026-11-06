@@ -25,7 +25,9 @@ export function sfx(name, vol = 1) {
 }
 
 // 合成音（ファイルなしで鳴らす小さな音）
+const VIB = { ok: 15, ng: [40, 40, 40], stamp: [30, 50, 60], combo: [10, 30, 10], coin: 20, click: 5 };
 export function tone(kind) {
+  if (S.settings.vibrate !== false && VIB[kind] && navigator.vibrate) { try { navigator.vibrate(VIB[kind]); } catch (e) {} }
   const c = ac(); if (!c || S.settings.sfx <= 0) return;
   const v = S.settings.sfx * 0.25;
   const seq = {

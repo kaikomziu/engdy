@@ -12,7 +12,7 @@ import "./stats.js";
 import "./agent.js";
 import { CHANGELOG } from "./changelog.js";
 
-export const VERSION = "1.2.0";
+export const VERSION = "1.3.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -201,6 +201,7 @@ onEnter("settings", () => {
     <div class="set-row"><label>発音を自動で読み上げ<small>単語が出たときに英語の音声を流す</small></label><input type="checkbox" id="setSpeak" ${st.autoSpeak ? "checked" : ""}></div>
     <div class="set-row"><label>BGM の音量</label><input type="range" min="0" max="1" step="0.05" id="setBgm" value="${st.bgm}"></div>
     <div class="set-row"><label>効果音の音量</label><input type="range" min="0" max="1" step="0.05" id="setSfx" value="${st.sfx}"></div>
+    <div class="set-row"><label>振動<small>正解・不正解・スタンプのときに、スマホを軽くふるわせる（Android など対応機種のみ）</small></label><input type="checkbox" id="setVib" ${st.vibrate !== false ? "checked" : ""}></div>
     <div class="set-row"><label>文字の大きさ<small>閲覧とテストの単語・意味の大きさ</small></label><div class="seg" id="setFs">${[["s", "小"], ["m", "中"], ["l", "大"]].map(([v, t]) => `<button data-fs="${v}" class="${(st.fontSize || "m") === v ? "on" : ""}">${t}</button>`).join("")}</div></div>
   </div>
   <div class="card"><h3 class="sec">🎯 今日の目標</h3>
@@ -225,6 +226,7 @@ onEnter("settings", () => {
   bind("#setSpeak", "autoSpeak");
   bind("#setBgm", "bgm", null, (v) => setBgmVolume(v));
   bind("#setSfx", "sfx", null, () => tone("click"));
+  bind("#setVib", "vibrate", null, (v) => { if (v) tone("ok"); });
   $("#setFs").onclick = (e) => {
     const b = e.target.closest("[data-fs]"); if (!b) return;
     st.fontSize = b.dataset.fs; save(); applyFontSize();

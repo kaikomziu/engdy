@@ -349,3 +349,50 @@ html[data-fs="l"]{--fscale:1.25}
 .type-res{text-align:center;font-size:18px;min-height:1.6em;margin:12px 0 0}
 kbd{font:600 12px var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:2px 7px;background:var(--bg);white-space:nowrap}
 .keys td:first-child{width:45%;font-family:var(--sans);font-weight:400}
+/* v1.3.0 スマホの操作性 */
+html{-webkit-tap-highlight-color:transparent}
+button,.btn,.mitem,.choice,.tab,.pick li,.mylist li{touch-action:manipulation}
+#tabbar{display:none}
+@media (max-width:760px){
+  /* iPhone で入力欄を押したときに拡大されないよう 16px 以上に */
+  input,textarea,select,.list-tools input,.list-tools select{font-size:16px}
+  textarea{font-size:16px;line-height:1.6}
+  /* 下のメニュー */
+  #tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:50;background:color-mix(in srgb,var(--paper) 94%,transparent);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:4px 4px max(6px,env(safe-area-inset-bottom))}
+  #tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;background:none;border:none;padding:6px 0;font-size:11px;font-weight:600;color:var(--sub);border-radius:10px}
+  #tabbar button span{font-size:20px;line-height:1.2;filter:grayscale(.6);opacity:.8}
+  #tabbar button.on{color:var(--accent)}
+  #tabbar button.on span{filter:none;opacity:1}
+  body[data-screen="login"] #tabbar,body[data-screen="view"] #tabbar,body[data-screen="test"] #tabbar{display:none}
+  body:not([data-screen="login"]):not([data-screen="view"]):not([data-screen="test"]) .screen{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  body:not([data-screen="login"]):not([data-screen="view"]):not([data-screen="test"]) .toast{bottom:calc(76px + env(safe-area-inset-bottom))}
+  /* モーダルは下から出るシートにして、ボタンを指の届く下に固定 */
+  .modal{display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;padding:0}
+  .modal-card{width:100%;max-height:calc(100% - 48px);border-radius:20px 20px 0 0;padding:20px 18px 0;animation:sheetUp .28s ease}
+  .modal-card::before{content:"";display:block;width:40px;height:4px;border-radius:4px;background:var(--line);margin:-8px auto 12px}
+  .modal-card>.row:last-child{position:sticky;bottom:0;background:var(--paper);margin:12px -18px 0;padding:12px 18px max(14px,env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+  .modal-card>.row:last-child .btn{flex:1;padding:13px 10px;font-size:15px}
+  .radio{padding:12px}
+  /* リスト制作：一覧は高さを抑え、ボタンは2列で押しやすく */
+  .mylist{max-height:190px;overflow:auto}
+  .editor .row.wrap{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .editor .row.wrap .btn{padding:12px 8px;white-space:normal}
+  #saveList{grid-column:1/-1;order:-1}
+  /* 閲覧：誤ってズーム・引っぱり更新しない、ボタンを大きく */
+  #s-view{padding-bottom:0}
+  .viewer{touch-action:pan-y;-webkit-user-select:none;user-select:none;overscroll-behavior:contain}
+  .vctrl{gap:8px;padding:10px 10px max(12px,env(safe-area-inset-bottom))}
+  .vctrl .btn{flex:1;min-width:0;padding:14px 6px;font-size:15px}
+  .speak{width:48px;height:48px}
+  /* テスト：選択肢を大きく */
+  .choice{padding:16px 14px;min-height:56px}
+  .type-row{flex-direction:column}
+  .type-row .btn{padding:13px}
+  /* ページの上のバー */
+  .pagebar{padding-top:max(10px,env(safe-area-inset-top))}
+  .back{width:42px;height:42px}
+  .page{padding:14px 12px 24px}
+  .g-btns .btn{flex:1}
+}
+@keyframes sheetUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+body{overscroll-behavior-y:none}

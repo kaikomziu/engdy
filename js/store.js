@@ -14,7 +14,7 @@ function fresh() {
     owned: { bg: ["plain"], theme: ["forest"], dex: {} },
     equip: { bg: "plain", theme: "forest" },
     pity: 0, pulls: 0,
-    settings: { showDelay: 3, nextDelay: 3, bgm: 0.35, sfx: 0.7, autoSpeak: false, shuffle: false, reverse: false, fontSize: "m", goalMin: 10, goalWords: 20, notify: false, notifyTime: "19:00", listSort: "updated" },
+    settings: { showDelay: 3, nextDelay: 3, bgm: 0.35, sfx: 0.7, autoSpeak: false, shuffle: false, reverse: false, fontSize: "m", goalMin: 10, goalWords: 20, notify: false, notifyTime: "19:00", listSort: "updated", vibrate: true },
     agent: { history: [] },
     pos: {},
     goal: { done: "", notified: "" },                     // 目標を達成した日・通知した日                                               // pos[リスト名] = 続きから始める位置

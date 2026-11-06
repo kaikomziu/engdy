@@ -1,7 +1,7 @@
 // ガチャ（派手な演出）・図鑑・きせかえ
 import { $, $$, esc, toast } from "./util.js";
 import { S, save } from "./store.js";
-import { onEnter } from "./router.js";
+import { onEnter, onBack } from "./router.js";
 import { sfx, tone, duck } from "./audio.js";
 import { RARITY, ORDER, COST1, COST10, PITY, DUP_REFUND, DEX, BGS, THEMES, ALL, byId, itemName, itemIcon, itemSub } from "./items.js";
 
@@ -187,7 +187,10 @@ function bindDone() {
   $("#gClose").onclick = close;
   $("#gAgain").onclick = () => { const n = $("#gAgain").textContent.includes("10連") ? 10 : 1; close(); setTimeout(() => pull(n), 50); };
 }
+// スマホの「戻る」で演出を閉じる
+onBack(() => { if (stage.hidden) return false; skip = true; if (skipResolve) skipResolve(); close(); return true; });
 function close() {
+  if (stage.hidden) return;
   stage.hidden = true; rays.classList.remove("on"); fx.stop(); duck(false);
   orb.getAnimations().forEach((a) => a.cancel());
   renderGacha();
