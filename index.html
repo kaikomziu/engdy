@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Engdy（いんぐてぃー）— 英単語を学んで、定着させる</title>
+<meta name="description" content="Engdy（いんぐてぃー）は、自分で作った単語リストを見て・テストして・定着させる英語学習アプリです。かるわかGAMES。">
+<meta name="theme-color" content="#f5f3ee">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css?v=1.0.0">
+<script src="https://kaikomziu.github.io/game-links/js/karuwaka-account.js" data-game="engdy" data-keys="engdy_v1,engdy_lists" data-badge="off"></script>
+</head>
+<body>
+<div id="bgLayer" aria-hidden="true"></div>
+
+<!-- ===== ログイン ===== -->
+<section id="s-login" class="screen">
+  <div class="login-wrap">
+    <p class="kicker">ENGLISH, EVERY DAY</p>
+    <h1 class="logo">Engdy</h1>
+    <p class="reading">いんぐてぃー</p>
+    <p class="lead">単語リストを作って、見て、テストして。<br>毎日すこしずつ、英語を自分のものに。</p>
+    <div class="login-btns">
+      <button class="btn pri big" data-act="login">ログイン</button>
+      <button class="btn big" data-act="register">アカウント登録</button>
+      <button class="btn ghost" data-act="guest">ゲストで始める</button>
+    </div>
+    <p class="note">かるわかGAMES アカウントで、ほかの端末とも記録を同期できます。<br>ゲストの記録はこのブラウザの中だけに保存されます。</p>
+  </div>
+</section>
+
+<!-- ===== メイン ===== -->
+<section id="s-main" class="screen">
+  <header class="topbar">
+    <div class="brand"><b>Engdy</b><small>いんぐてぃー</small></div>
+    <div class="top-right">
+      <span class="dia" title="ダイヤ">💎 <b id="diaCount">0</b></span>
+      <button class="chip" id="acctBtn">ゲスト</button>
+    </div>
+  </header>
+  <main class="main-body">
+    <div class="today card" id="todayCard"></div>
+    <div class="stampcard card" id="stampCard"></div>
+    <nav class="menu">
+      <button class="mitem" data-go="create"><span class="mi-no">01</span><span class="mi-t">リスト制作<small>CREATE</small></span></button>
+      <button class="mitem" data-go="browse"><span class="mi-no">02</span><span class="mi-t">閲覧<small>BROWSE</small></span></button>
+      <button class="mitem" data-go="stats"><span class="mi-no">03</span><span class="mi-t">統計<small>STATS</small></span></button>
+      <button class="mitem" data-go="test"><span class="mi-no">04</span><span class="mi-t">テストモード<small>TEST</small></span></button>
+      <button class="mitem" data-go="agent" id="agentItem"><span class="mi-no">05</span><span class="mi-t">専属エージェント<small>AGENT</small></span><span class="lock" id="agentLock">🔒</span></button>
+      <button class="mitem" data-go="gacha"><span class="mi-no">06</span><span class="mi-t">ガチャ<small>GACHA</small></span></button>
+    </nav>
+    <div class="sub-links">
+      <button class="link" data-go="collection">図鑑・きせかえ</button>
+      <button class="link" data-go="parent">保護者メール</button>
+      <button class="link" data-go="settings">設定</button>
+      <button class="link" data-go="credits">クレジット</button>
+      <button class="link admin-only" data-go="admin" hidden>admin</button>
+    </div>
+  </main>
+</section>
+
+<!-- ===== リスト制作 ===== -->
+<section id="s-create" class="screen">
+  <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">01 CREATE</p><h2>リスト制作</h2></div></header>
+  <div class="page two-col">
+    <aside class="card side">
+      <div class="side-head"><b>自分のリスト</b><button class="btn sm" id="newList">＋ 新しく作る</button></div>
+      <ul class="mylist" id="myLists"></ul>
+      <div class="side-foot">
+        <button class="btn sm" id="importFile">.engdy を読み込む</button>
+        <input type="file" id="fileInput" accept=".engdy,text/plain" hidden>
+      </div>
+    </aside>
+    <div class="card editor">
+      <label class="field"><span>タイトル</span><input id="listTitle" maxlength="60" placeholder="例：中2 教科書 Unit 3"></label>
+      <label class="field"><span>単語（1行に1つ）</span>
+        <textarea id="listWords" rows="12" spellcheck="false" placeholder="apple, りんご&#10;run, 走る&#10;beautiful&#10;look forward to&#10;&#10;※ 意味は「,」「タブ」「：」のあとに書きます。書かなくても、あとで自動で付けられます。"></textarea>
+      </label>
+      <p class="hint" id="parseInfo"></p>
+      <div class="row wrap">
+        <button class="btn" id="autoMeaning">✨ 意味を自動で付ける</button>
+        <button class="btn pri" id="saveList">保存</button>
+        <button class="btn" id="exportFile">.engdy で書き出す</button>
+        <button class="btn" id="publishList">公開する…</button>
+        <button class="btn danger ghost" id="deleteList">削除</button>
+      </div>
+      <p class="pubinfo" id="pubInfo"></p>
+      <div class="preview" id="listPreview"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 閲覧（リスト選び） ===== -->
+<section id="s-browse" class="screen">
+  <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">02 BROWSE</p><h2>閲覧</h2></div></header>
+  <div class="page">
+    <div class="tabs" id="browseTabs">
+      <button class="tab on" data-tab="mine">自分のリスト</button>
+      <button class="tab" data-tab="public">みんなのリスト</button>
+      <button class="tab" data-tab="code">URL・コード</button>
+    </div>
+    <div class="card tabpane" data-pane="mine"><ul class="pick" id="pickMine"></ul></div>
+    <div class="card tabpane" data-pane="public" hidden>
+      <div class="row"><input id="pubSearch" placeholder="タイトルで検索" class="grow"><button class="btn" id="pubReload">検索</button></div>
+      <ul class="pick" id="pickPublic"></ul>
+    </div>
+    <div class="card tabpane" data-pane="code" hidden>
+      <p class="hint">共有された URL か、コードを貼り付けてください。</p>
+      <div class="row"><input id="codeInput" class="grow" placeholder="https://kaikomziu.github.io/engdy/?list=…"><button class="btn pri" id="codeOpen">開く</button></div>
+      <p class="hint">.engdy ファイルから始めることもできます。</p>
+      <button class="btn" id="browseFile">.engdy ファイルを選ぶ</button>
+      <input type="file" id="browseFileInput" accept=".engdy,text/plain" hidden>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 閲覧（再生） ===== -->
+<section id="s-view" class="screen">
+  <header class="pagebar">
+    <button class="back" id="viewQuit">✕</button>
+    <div class="grow"><p class="kicker" id="viewTitle">BROWSE</p><div class="progress"><i id="viewBar"></i></div></div>
+    <span class="count" id="viewCount">0 / 0</span>
+  </header>
+  <div class="viewer" id="viewer">
+    <button class="speak" id="viewSpeak" title="発音を聞く">🔊</button>
+    <div class="vword" id="vWord"></div>
+    <div class="vmean" id="vMean"></div>
+    <div class="vhint" id="vHint">タップで意味を表示</div>
+    <div class="vtimer"><i id="vTimer"></i></div>
+  </div>
+  <div class="idle" id="idleBox" hidden>
+    <div class="card"><p class="kicker">PAUSED</p><h3>一時停止中</h3><p>しばらく操作がなかったので止めました。<br>放置していた時間は記録に入りません。</p><button class="btn pri" id="idleResume">続ける</button></div>
+  </div>
+</section>
+
+<!-- ===== 閲覧の結果 ===== -->
+<section id="s-viewdone" class="screen">
+  <div class="center-wrap">
+    <div class="card done-card" id="viewDone"></div>
+  </div>
+</section>
+
+<!-- ===== 統計 ===== -->
+<section id="s-stats" class="screen">
+  <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">03 STATS</p><h2>統計</h2></div></header>
+  <div class="page" id="statsBody"></div>
+</section>
+
+<!-- ===== テスト ===== -->
+<section id="s-test" class="screen">
+  <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">04 TEST</p><h2>テストモード</h2></div></header>
+  <div class="page" id="testBody"></div>
+</section>
+
+<!-- ===== 専属エージェント ===== -->
+<section id="s-agent" class="screen">
+  <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">05 AGENT</p><h2>専属エージェント</h2></div></header>
+  <div class="page" id="agentBody"></div>
+</section>
+
+<!-- ===== ガチャ ===== -->
+<section id="s-gacha" class="screen">
+  <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">06 GACHA</p><h2>ガチャ</h2></div><span class="dia">💎 <b class="diaMirror">0</b></span></header>
+  <div class="page" id="gachaBody"></div>
+</section>
+<div id="gachaStage" hidden>
+  <canvas id="fx"></canvas>
+  <div class="g-rays" id="gRays"></div>
+  <div class="g-orb" id="gOrb"><div class="g-orb-core"></div></div>
+  <div class="g-flash" id="gFlash"></div>
+  <div class="g-result" id="gResult"></div>
+  <button class="g-skip" id="gSkip">スキップ ▶▶</button>
+</div>
+
+<!-- ===== 図鑑・きせかえ ===== -->
+<section id="s-collection" class="screen">
+  <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">COLLECTION</p><h2>図鑑・きせかえ</h2></div></header>
+  <div class="page" id="colBody"></div>
+</section>
+
+<!-- ===== 保護者メール ===== -->
+<section id="s-parent" class="screen">
+  <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">PARENT MAIL</p><h2>保護者メール</h2></div></header>
+  <div class="page narrow" id="parentBody"></div>
+</section>
+
+<!-- ===== 設定 ===== -->
+<section id="s-settings" class="screen">
+  <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">SETTINGS</p><h2>設定</h2></div></header>
+  <div class="page narrow" id="settingsBody"></div>
+</section>
+
+<!-- ===== クレジット ===== -->
+<section id="s-credits" class="screen">
+  <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">CREDITS</p><h2>クレジット</h2></div></header>
+  <div class="page narrow">
+    <div class="card credits">
+      <dl>
+        <dt>作者</dt><dd>かるわか</dd>
+        <dt>コード</dt><dd>Claude AI（Anthropic）</dd>
+        <dt>アカウント</dt><dd>かるわかGAMES</dd>
+        <dt>AI</dt><dd>Google Gemini API</dd>
+        <dt>メール配信</dt><dd>AgentMail</dd>
+        <dt>データベース</dt><dd>Supabase</dd>
+        <dt>効果音</dt><dd>OtoLogic（CC BY 4.0）<br>効果音ラボ</dd>
+        <dt>BGM</dt><dd>ふぁいの音楽置き場（fai-musics）<br>「ほっこりひととき」「静かな図書室で」「おひるすぎ」</dd>
+      </dl>
+      <p class="hint">バージョン <span class="ver">v1.0.0</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== admin ===== -->
+<section id="s-admin" class="screen">
+  <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">ADMIN</p><h2>admin</h2></div></header>
+  <div class="page narrow" id="adminBody"></div>
+</section>
+
+<div id="modal" class="modal" hidden><div class="modal-card card" id="modalCard"></div></div>
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="js/app.js?v=1.0.0"></script>
+</body>
+</html>
