@@ -396,3 +396,49 @@ button,.btn,.mitem,.choice,.tab,.pick li,.mylist li{touch-action:manipulation}
 }
 @keyframes sheetUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
 body{overscroll-behavior-y:none}
+/* v1.4.0 自由メモ */
+#s-memo{display:none;flex-direction:column;height:100vh;height:100dvh}
+#s-memo.active{display:flex}
+.memo-bar{gap:10px}
+.memo-title{flex:1;min-width:0;font-weight:700;font-size:16px;border-color:transparent;background:transparent}
+.memo-title:hover,.memo-title:focus{border-color:var(--line);background:var(--paper)}
+.memo-nav{display:flex;align-items:center;gap:6px}
+.memo-nav .btn{min-width:36px;padding:6px 10px}
+.memo-toolbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--paper)}
+.memo-tools{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.mtool{display:flex;flex-direction:column;align-items:center;gap:0;min-width:52px;padding:5px 6px;border:1px solid transparent;border-radius:10px;background:none;line-height:1.2}
+.mtool span{font-size:20px}
+.mtool small{font-size:10px;color:var(--sub);font-weight:600}
+.mtool.on{background:var(--accent-soft);border-color:var(--accent)}
+.mtool.on small{color:var(--accent)}
+.memo-opts{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.memo-colors{display:flex;gap:6px;align-items:center}
+.msw{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);background:var(--c);padding:0;position:relative;overflow:hidden;flex:none}
+.msw.on{box-shadow:0 0 0 2px var(--paper),0 0 0 4px var(--accent)}
+.msw.custom{background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);cursor:pointer}
+.msw.custom input{position:absolute;inset:-6px;opacity:0;cursor:pointer;padding:0;border:none}
+.memo-width{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--sub);font-weight:600}
+.memo-width input{width:100px;padding:0}
+.memo-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 85%,#000 4%);overflow:hidden;padding:8px}
+.memo-paper{position:relative;box-shadow:0 2px 14px rgba(0,0,0,.14);border-radius:4px;overflow:hidden;background:#fffdf8}
+.memo-paper canvas{position:absolute;inset:0;display:block}
+#memoLive{touch-action:none;cursor:crosshair}
+.memo-pages{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:40vh;overflow:auto}
+.memo-pages li{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.memo-pages li.on{border-color:var(--accent);background:var(--accent-soft)}
+.memo-pages li b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.memo-pages li small{color:var(--sub)}
+.mp-no{font:600 12px var(--mono);color:var(--accent);min-width:20px}
+.mp-ops{display:flex}
+@media (max-width:760px){
+  body[data-screen="memo"] #tabbar{display:none}
+  body[data-screen="memo"] .screen{padding-bottom:0}
+  .memo-toolbar{padding:6px 8px;gap:6px}
+  .memo-tools{width:100%;justify-content:space-between}
+  .mtool{min-width:0;flex:1;padding:4px 2px}
+  .memo-opts{width:100%;justify-content:space-between}
+  .memo-colors{overflow-x:auto;scrollbar-width:none;flex:1}
+  .memo-width input{width:70px}
+  .memo-bar .back{width:38px;height:38px}
+  .memo-nav .btn{min-width:34px;padding:6px 8px}
+}

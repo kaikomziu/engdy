@@ -11,8 +11,9 @@ import "./test.js";
 import "./stats.js";
 import "./agent.js";
 import { CHANGELOG } from "./changelog.js";
+import "./memo.js";
 
-export const VERSION = "1.3.0";
+export const VERSION = "1.4.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================

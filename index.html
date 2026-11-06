@@ -12,8 +12,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Engdy">
-<link rel="stylesheet" href="css/style.css?v=1.3.0">
-<script src="https://kaikomziu.github.io/game-links/js/karuwaka-account.js" data-game="engdy" data-keys="engdy_v1,engdy_lists" data-badge="off"></script>
+<link rel="stylesheet" href="css/style.css?v=1.4.0">
+<script src="https://kaikomziu.github.io/game-links/js/karuwaka-account.js" data-game="engdy" data-keys="engdy_v1,engdy_lists,engdy_memo" data-badge="off"></script>
 </head>
 <body>
 <div id="bgLayer" aria-hidden="true"></div>
@@ -54,6 +54,7 @@
       <button class="mitem" data-go="test"><span class="mi-no">04</span><span class="mi-t">テストモード<small>TEST</small></span></button>
       <button class="mitem" data-go="agent" id="agentItem"><span class="mi-no">05</span><span class="mi-t">専属エージェント<small>AGENT</small></span><span class="lock" id="agentLock">🔒</span></button>
       <button class="mitem" data-go="gacha"><span class="mi-no">06</span><span class="mi-t">ガチャ<small>GACHA</small></span></button>
+      <button class="mitem" data-go="memo"><span class="mi-no">07</span><span class="mi-t">自由メモ<small>NOTE</small></span></button>
     </nav>
     <div class="sub-links">
       <button class="link" data-go="collection">図鑑・きせかえ</button>
@@ -188,6 +189,32 @@
   <button class="g-skip" id="gSkip">スキップ ▶▶</button>
 </div>
 
+<!-- ===== 自由メモ ===== -->
+<section id="s-memo" class="screen">
+  <header class="pagebar memo-bar">
+    <button class="back" data-go="main">←</button>
+    <input id="memoTitle" class="memo-title" maxlength="40" aria-label="ページの名前">
+    <div class="memo-nav">
+      <button class="btn sm" id="memoPrev" title="前のページ">◀</button>
+      <span class="count" id="memoPageNo">1 / 1</span>
+      <button class="btn sm" id="memoNext" title="次のページ">▶</button>
+      <button class="btn sm" id="memoMenu" title="ページの一覧・背景・保存">☰</button>
+    </div>
+  </header>
+  <div class="memo-toolbar">
+    <div class="memo-tools" id="memoTools"></div>
+    <div class="memo-opts">
+      <div class="memo-colors" id="memoColors"></div>
+      <label class="memo-width" id="memoWidthWrap" title="太さ">太さ <input type="range" id="memoWidth" min="1" max="40" value="5"></label>
+      <button class="btn sm" id="memoUndo" title="元に戻す（Ctrl+Z）">↶</button>
+      <button class="btn sm" id="memoRedo" title="やり直す（Ctrl+Y）">↷</button>
+    </div>
+  </div>
+  <div class="memo-stage" id="memoStage">
+    <div class="memo-paper" id="memoPaper"><canvas id="memoBase"></canvas><canvas id="memoLive"></canvas></div>
+  </div>
+</section>
+
 <!-- ===== 図鑑・きせかえ ===== -->
 <section id="s-collection" class="screen">
   <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">COLLECTION</p><h2>図鑑・きせかえ</h2></div></header>
@@ -221,7 +248,7 @@
         <dt>効果音</dt><dd>OtoLogic（CC BY 4.0）<br>効果音ラボ</dd>
         <dt>BGM</dt><dd>ふぁいの音楽置き場（fai-musics）<br>「ほっこりひととき」「静かな図書室で」「おひるすぎ」</dd>
       </dl>
-      <p class="hint">バージョン <span class="ver">v1.3.0</span></p>
+      <p class="hint">バージョン <span class="ver">v1.4.0</span></p>
     </div>
   </div>
 </section>
@@ -250,7 +277,7 @@
 <div id="modal" class="modal" hidden><div class="modal-card card" id="modalCard"></div></div>
 <div id="toast" class="toast" hidden></div>
 
-<script type="importmap">{"imports":{"./js/agent.js":"./js/agent.js?v=1.3.0","./js/api.js":"./js/api.js?v=1.3.0","./js/app.js":"./js/app.js?v=1.3.0","./js/audio.js":"./js/audio.js?v=1.3.0","./js/changelog.js":"./js/changelog.js?v=1.3.0","./js/crypto.js":"./js/crypto.js?v=1.3.0","./js/gacha.js":"./js/gacha.js?v=1.3.0","./js/items.js":"./js/items.js?v=1.3.0","./js/lists.js":"./js/lists.js?v=1.3.0","./js/router.js":"./js/router.js?v=1.3.0","./js/stats.js":"./js/stats.js?v=1.3.0","./js/store.js":"./js/store.js?v=1.3.0","./js/test.js":"./js/test.js?v=1.3.0","./js/util.js":"./js/util.js?v=1.3.0","./js/view.js":"./js/view.js?v=1.3.0"}}</script>
-<script type="module" src="js/app.js?v=1.3.0"></script>
+<script type="importmap">{"imports":{"./js/agent.js":"./js/agent.js?v=1.4.0","./js/api.js":"./js/api.js?v=1.4.0","./js/app.js":"./js/app.js?v=1.4.0","./js/audio.js":"./js/audio.js?v=1.4.0","./js/changelog.js":"./js/changelog.js?v=1.4.0","./js/crypto.js":"./js/crypto.js?v=1.4.0","./js/gacha.js":"./js/gacha.js?v=1.4.0","./js/items.js":"./js/items.js?v=1.4.0","./js/lists.js":"./js/lists.js?v=1.4.0","./js/router.js":"./js/router.js?v=1.4.0","./js/stats.js":"./js/stats.js?v=1.4.0","./js/store.js":"./js/store.js?v=1.4.0","./js/test.js":"./js/test.js?v=1.4.0","./js/util.js":"./js/util.js?v=1.4.0","./js/view.js":"./js/view.js?v=1.4.0","./js/memo.js":"./js/memo.js?v=1.4.0"}}</script>
+<script type="module" src="js/app.js?v=1.4.0"></script>
 </body>
 </html>
