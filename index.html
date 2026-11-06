@@ -7,7 +7,12 @@
 <meta name="description" content="Engdy（いんぐてぃー）は、自分で作った単語リストを見て・テストして・定着させる英語学習アプリです。かるわかGAMES。">
 <meta name="theme-color" content="#f5f3ee">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="css/style.css?v=1.1.0">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Engdy">
+<link rel="stylesheet" href="css/style.css?v=1.2.0">
 <script src="https://kaikomziu.github.io/game-links/js/karuwaka-account.js" data-game="engdy" data-keys="engdy_v1,engdy_lists" data-badge="off"></script>
 </head>
 <body>
@@ -40,6 +45,7 @@
   </header>
   <main class="main-body">
     <div class="today card" id="todayCard"></div>
+    <div class="card resume" id="resumeCard" hidden></div>
     <div class="stampcard card" id="stampCard"></div>
     <nav class="menu">
       <button class="mitem" data-go="create"><span class="mi-no">01</span><span class="mi-t">リスト制作<small>CREATE</small></span></button>
@@ -53,6 +59,7 @@
       <button class="link" data-go="collection">図鑑・きせかえ</button>
       <button class="link" data-go="parent">保護者メール</button>
       <button class="link" data-go="settings">設定</button>
+      <button class="link" id="keysLink">ショートカット</button>
       <button class="link" data-go="changelog">更新履歴</button>
       <button class="link" data-go="credits">クレジット</button>
       <button class="link admin-only" data-go="admin" hidden>admin</button>
@@ -66,21 +73,24 @@
   <div class="page two-col">
     <aside class="card side">
       <div class="side-head"><b>自分のリスト</b><button class="btn sm" id="newList">＋ 新しく作る</button></div>
+      <div class="list-tools"><input id="mySearch" placeholder="検索" class="grow"><select id="mySort" class="list-sort"></select></div>
       <ul class="mylist" id="myLists"></ul>
       <div class="side-foot">
-        <button class="btn sm" id="importFile">.engdy を読み込む</button>
-        <input type="file" id="fileInput" accept=".engdy,text/plain" hidden>
+        <button class="btn sm" id="importFile">ファイルを読み込む</button>
+        <p class="hint">.engdy のほか、CSV・TSV（Excel で保存した表）も読み込めます</p>
+        <input type="file" id="fileInput" accept=".engdy,.csv,.tsv,.txt,text/plain,text/csv" hidden>
       </div>
     </aside>
     <div class="card editor">
       <label class="field"><span>タイトル</span><input id="listTitle" maxlength="60" placeholder="例：中2 教科書 Unit 3"></label>
       <label class="field"><span>単語（1行に1つ）</span>
-        <textarea id="listWords" rows="12" spellcheck="false" placeholder="apple, りんご&#10;run, 走る&#10;beautiful&#10;look forward to&#10;&#10;※ 意味は「,」「タブ」「：」のあとに書きます。書かなくても、あとで自動で付けられます。"></textarea>
+        <textarea id="listWords" rows="12" spellcheck="false" placeholder="apple, りんご&#10;run, 走る&#10;beautiful&#10;look forward to&#10;&#10;※ 意味は「,」「タブ」「：」のあとに書きます。書かなくても、あとで自動で付けられます。&#10;※ Excel やスプレッドシートの2列の表を、そのまま貼り付けることもできます。"></textarea>
       </label>
       <p class="hint" id="parseInfo"></p>
       <div class="row wrap">
         <button class="btn" id="autoMeaning">✨ 意味を自動で付ける</button>
         <button class="btn pri" id="saveList">保存</button>
+        <button class="btn" id="dupList">複製</button>
         <button class="btn" id="exportFile">.engdy で書き出す</button>
         <button class="btn" id="publishList">公開する…</button>
         <button class="btn danger ghost" id="deleteList">削除</button>
@@ -100,7 +110,7 @@
       <button class="tab" data-tab="public">みんなのリスト</button>
       <button class="tab" data-tab="code">URL・コード</button>
     </div>
-    <div class="card tabpane" data-pane="mine"><ul class="pick" id="pickMine"></ul></div>
+    <div class="card tabpane" data-pane="mine"><div class="list-tools"><input id="pickSearch" placeholder="リスト名や単語で検索" class="grow"><select id="pickSort" class="list-sort"></select></div><ul class="pick" id="pickMine"></ul></div>
     <div class="card tabpane" data-pane="public" hidden>
       <div class="row"><input id="pubSearch" placeholder="タイトルで検索" class="grow"><button class="btn" id="pubReload">検索</button></div>
       <ul class="pick" id="pickPublic"></ul>
@@ -110,7 +120,7 @@
       <div class="row"><input id="codeInput" class="grow" placeholder="https://kaikomziu.github.io/engdy/?list=…"><button class="btn pri" id="codeOpen">開く</button></div>
       <p class="hint">.engdy ファイルから始めることもできます。</p>
       <button class="btn" id="browseFile">.engdy ファイルを選ぶ</button>
-      <input type="file" id="browseFileInput" accept=".engdy,text/plain" hidden>
+      <input type="file" id="browseFileInput" accept=".engdy,.csv,.tsv,.txt,text/plain,text/csv" hidden>
     </div>
   </div>
 </section>
@@ -128,6 +138,11 @@
     <div class="vmean" id="vMean"></div>
     <div class="vhint" id="vHint">タップで意味を表示</div>
     <div class="vtimer"><i id="vTimer"></i></div>
+  </div>
+  <div class="vctrl">
+    <button class="btn" id="vBack">◀ 戻る</button>
+    <button class="btn" id="vPause">⏸ 一時停止</button>
+    <button class="btn pri" id="vNext">次へ ▶</button>
   </div>
   <div class="idle" id="idleBox" hidden>
     <div class="card"><p class="kicker">PAUSED</p><h3>一時停止中</h3><p>しばらく操作がなかったので止めました。<br>放置していた時間は記録に入りません。</p><button class="btn pri" id="idleResume">続ける</button></div>
@@ -206,7 +221,7 @@
         <dt>効果音</dt><dd>OtoLogic（CC BY 4.0）<br>効果音ラボ</dd>
         <dt>BGM</dt><dd>ふぁいの音楽置き場（fai-musics）<br>「ほっこりひととき」「静かな図書室で」「おひるすぎ」</dd>
       </dl>
-      <p class="hint">バージョン <span class="ver">v1.1.0</span></p>
+      <p class="hint">バージョン <span class="ver">v1.2.0</span></p>
     </div>
   </div>
 </section>
@@ -226,7 +241,7 @@
 <div id="modal" class="modal" hidden><div class="modal-card card" id="modalCard"></div></div>
 <div id="toast" class="toast" hidden></div>
 
-<script type="importmap">{"imports":{"./js/agent.js":"./js/agent.js?v=1.1.0","./js/api.js":"./js/api.js?v=1.1.0","./js/app.js":"./js/app.js?v=1.1.0","./js/audio.js":"./js/audio.js?v=1.1.0","./js/changelog.js":"./js/changelog.js?v=1.1.0","./js/crypto.js":"./js/crypto.js?v=1.1.0","./js/gacha.js":"./js/gacha.js?v=1.1.0","./js/items.js":"./js/items.js?v=1.1.0","./js/lists.js":"./js/lists.js?v=1.1.0","./js/router.js":"./js/router.js?v=1.1.0","./js/stats.js":"./js/stats.js?v=1.1.0","./js/store.js":"./js/store.js?v=1.1.0","./js/test.js":"./js/test.js?v=1.1.0","./js/util.js":"./js/util.js?v=1.1.0","./js/view.js":"./js/view.js?v=1.1.0"}}</script>
-<script type="module" src="js/app.js?v=1.1.0"></script>
+<script type="importmap">{"imports":{"./js/agent.js":"./js/agent.js?v=1.2.0","./js/api.js":"./js/api.js?v=1.2.0","./js/app.js":"./js/app.js?v=1.2.0","./js/audio.js":"./js/audio.js?v=1.2.0","./js/changelog.js":"./js/changelog.js?v=1.2.0","./js/crypto.js":"./js/crypto.js?v=1.2.0","./js/gacha.js":"./js/gacha.js?v=1.2.0","./js/items.js":"./js/items.js?v=1.2.0","./js/lists.js":"./js/lists.js?v=1.2.0","./js/router.js":"./js/router.js?v=1.2.0","./js/stats.js":"./js/stats.js?v=1.2.0","./js/store.js":"./js/store.js?v=1.2.0","./js/test.js":"./js/test.js?v=1.2.0","./js/util.js":"./js/util.js?v=1.2.0","./js/view.js":"./js/view.js?v=1.2.0"}}</script>
+<script type="module" src="js/app.js?v=1.2.0"></script>
 </body>
 </html>

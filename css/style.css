@@ -318,3 +318,34 @@ h3.sec{font-size:15px;margin:0 0 10px}
 .log li{margin:4px 0}
 .log-head{display:flex;justify-content:space-between;align-items:baseline}
 .log-head b{font-size:17px}
+/* v1.2.0 */
+:root{--fscale:1}
+html[data-fs="s"]{--fscale:.8}
+html[data-fs="l"]{--fscale:1.25}
+.vword{font-size:calc(clamp(40px,9vw,86px) * var(--fscale))}
+.vword.ja{font-family:var(--sans);font-size:calc(clamp(28px,6vw,56px) * var(--fscale))}
+.vmean{font-size:calc(clamp(20px,4.4vw,30px) * var(--fscale))}
+.vmean.en{font-family:var(--serif);font-size:calc(clamp(28px,6vw,52px) * var(--fscale))}
+.q-word{font-size:calc(clamp(34px,7vw,60px) * var(--fscale))}
+.q-word.ja{font-size:calc(clamp(24px,5vw,38px) * var(--fscale))}
+.choice{font-size:calc(16px * var(--fscale))}
+.vctrl{display:flex;justify-content:center;gap:10px;padding:10px 16px max(14px,env(safe-area-inset-bottom));border-top:1px solid var(--line);background:color-mix(in srgb,var(--bg) 90%,transparent)}
+.vctrl .btn{min-width:96px}
+.vctrl .btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.list-tools{display:flex;gap:6px;margin-bottom:10px}
+.list-tools input{padding:7px 10px;font-size:13px;min-width:0}
+.list-tools select{padding:7px 8px;font-size:13px}
+.resume{border-left:4px solid var(--accent)}
+.goal{flex-basis:100%;border-top:1px solid var(--line);padding-top:12px;display:grid;gap:6px}
+.goal-head{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
+.goal-row{display:grid;grid-template-columns:90px 1fr;gap:10px;align-items:center;font-size:13px;color:var(--sub)}
+.goal .meter{height:8px}
+.goal .meter i{background:var(--accent)}
+.type-hint{text-align:center;font:600 18px var(--mono);letter-spacing:.1em;color:var(--sub);margin:4px 0}
+.type-row{display:flex;gap:8px}
+.type-row input{font-size:20px;font-family:var(--serif)}
+.type-row input.ok{border-color:#2f8f5e;background:#e4f3ea}
+.type-row input.ng{border-color:var(--warn);background:#f8e6e0}
+.type-res{text-align:center;font-size:18px;min-height:1.6em;margin:12px 0 0}
+kbd{font:600 12px var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:2px 7px;background:var(--bg);white-space:nowrap}
+.keys td:first-child{width:45%;font-family:var(--sans);font-weight:400}

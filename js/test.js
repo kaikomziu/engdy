@@ -5,7 +5,7 @@ import { go, onEnter, onLeave } from "./router.js";
 import { tone } from "./audio.js";
 import { startList } from "./lists.js";
 
-const Q_TIME = 12;            // 1問の制限時間（秒）
+const Q_TIME = 12, TYPE_TIME = 30;   // 1問の制限時間（秒）。書き取りは長め
 let T = null, opt = { n: 10, dir: "en" };
 
 onEnter("test", renderStart);
@@ -24,7 +24,7 @@ function renderStart() {
     <p class="hint">閲覧で見た ${pool.length}語 から出題します。間違えた単語ほど、よく出ます。</p>
     <div class="t-opts">
       <div class="seg" id="optN">${[10, 20, 30].map((n) => `<button data-n="${n}" class="${opt.n === n ? "on" : ""}">${n}問</button>`).join("")}</div>
-      <div class="seg" id="optDir"><button data-d="en" class="${opt.dir === "en" ? "on" : ""}">英語 → 意味</button><button data-d="ja" class="${opt.dir === "ja" ? "on" : ""}">意味 → 英語</button></div>
+      <div class="seg" id="optDir"><button data-d="en" class="${opt.dir === "en" ? "on" : ""}">英語 → 意味</button><button data-d="ja" class="${opt.dir === "ja" ? "on" : ""}">意味 → 英語</button><button data-d="type" class="${opt.dir === "type" ? "on" : ""}">✏️ 書き取り</button></div>
     </div>
     <button class="btn pri big" style="max-width:280px" id="tGo">スタート</button>
     <p class="hint" style="margin-top:16px">これまで：${S.test.total}問 ・ 正答率 ${S.test.total ? Math.round(S.test.correct / S.test.total * 100) : 0}% ・ ベスト ${S.test.best}点</p>
@@ -56,8 +56,31 @@ function start(pool) {
   showQ();
 }
 
+// 書き取りの答え合わせ用（大文字小文字・空白・記号の違いは無視）
+const norm = (s) => String(s || "").toLowerCase().replace(/[’']/g, "'").replace(/[^a-z0-9' -]/g, "").replace(/\s+/g, " ").trim();
+const qTime = () => (T.dir === "type" ? TYPE_TIME : Q_TIME);
+
+function showTyping(q) {
+  T.answered = false; T.right = q.w; T.t0 = performance.now();
+  const hint = q.w.split(" ").map((p) => p[0] + "＿".repeat(Math.max(0, p.length - 1))).join("　");
+  $("#testBody").innerHTML = `<div class="card">
+    <div class="q-head"><span>Q${T.i + 1} / ${T.qs.length}</span><span>${T.combo >= 2 ? `🔥 ${T.combo}連続` : ""}</span><span>${T.score}点</span></div>
+    <div class="q-word ja">${esc(q.m)}</div>
+    <p class="type-hint">${esc(hint)}（${q.w.replace(/ /g, "").length}文字）</p>
+    <div class="q-time"><i id="qTime"></i></div>
+    <div class="type-row"><input id="tIn" class="grow" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="英語で入力して Enter"><button class="btn pri" id="tOk">答える</button></div>
+    <div style="text-align:center;margin-top:10px"><button class="btn sm ghost" id="tSkip">わからない</button></div>
+    <p class="type-res" id="tRes"></p>
+  </div>`;
+  const inp = $("#tIn"); inp.focus();
+  inp.onkeydown = (e) => { if (e.key === "Enter" && !e.isComposing) answer(null, inp.value); };
+  $("#tOk").onclick = () => answer(null, inp.value);
+  $("#tSkip").onclick = () => answer(null, "");
+}
+
 function showQ() {
   const q = T.qs[T.i];
+  if (T.dir === "type") { showTyping(q); startTimer(); return; }
   const key = T.dir === "en" ? "m" : "w";
   const right = q[key];
   const others = shuffle(T.pool.filter((x) => x[key] && x[key] !== right && x.w !== q.w)).slice(0, 3).map((x) => x[key]);
@@ -73,27 +96,35 @@ function showQ() {
   const sp = $("#qSpeak"); if (sp) sp.onclick = () => speak(q.w);
   if (T.dir === "en" && S.settings.autoSpeak) speak(q.w);
   $$(".choice").forEach((b) => (b.onclick = () => answer(b)));
+  startTimer();
+}
+function startTimer() {
   clearInterval(T.timer);
   T.timer = setInterval(() => {
-    const left = Q_TIME - (performance.now() - T.t0) / 1000;
-    const bar = $("#qTime"); if (bar) bar.style.width = `${Math.max(0, left / Q_TIME) * 100}%`;
-    if (left <= 0) answer(null);
+    const left = qTime() - (performance.now() - T.t0) / 1000;
+    const bar = $("#qTime"); if (bar) bar.style.width = `${Math.max(0, left / qTime()) * 100}%`;
+    if (left <= 0) answer(null, T.dir === "type" ? ($("#tIn") || {}).value || "" : undefined);
   }, 100);
 }
 
 document.addEventListener("keydown", (e) => {
-  if (!T || !document.querySelector("#s-test.active")) return;
+  if (!T || !document.querySelector("#s-test.active") || T.dir === "type") return;
   const n = parseInt(e.key, 10);
   if (n >= 1 && n <= 4) { const b = $$(".choice")[n - 1]; if (b) answer(b); }
 });
 
-function answer(btn) {
+function answer(btn, typed) {
   if (!T || T.answered) return;
   T.answered = true; clearInterval(T.timer);
   const q = T.qs[T.i];
-  const ok = btn && btn.dataset.c === T.right;
-  const left = Math.max(0, Q_TIME - (performance.now() - T.t0) / 1000);
+  const ok = typed !== undefined ? !!typed && norm(typed) === norm(q.w) : !!btn && btn.dataset.c === T.right;
+  const left = Math.max(0, qTime() - (performance.now() - T.t0) / 1000);
   $$(".choice").forEach((b) => { if (b.dataset.c === T.right) b.classList.add("ok"); });
+  if (typed !== undefined) {
+    const inp = $("#tIn"); if (inp) { inp.disabled = true; inp.classList.add(ok ? "ok" : "ng"); }
+    $("#tRes").innerHTML = ok ? "⭕ 正解！" : `❌ 正解は <b>${esc(q.w)}</b>`;
+    speak(q.w);
+  }
   const r = S.words[q.w];
   if (ok) {
     T.combo++; T.maxCombo = Math.max(T.maxCombo, T.combo); T.correct++;
@@ -112,7 +143,7 @@ function answer(btn) {
   S.test.total++; if (ok) S.test.correct++;
   const t = today(); t.tt++; if (ok) t.tc++;
   save();
-  setTimeout(() => { if (!T) return; T.i++; if (T.i >= T.qs.length) finish(); else showQ(); }, ok ? 650 : 1400);
+  setTimeout(() => { if (!T) return; T.i++; if (T.i >= T.qs.length) finish(); else showQ(); }, typed !== undefined ? (ok ? 900 : 2200) : ok ? 650 : 1400);
 }
 
 function pop(text) {

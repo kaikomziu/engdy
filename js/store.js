@@ -14,9 +14,10 @@ function fresh() {
     owned: { bg: ["plain"], theme: ["forest"], dex: {} },
     equip: { bg: "plain", theme: "forest" },
     pity: 0, pulls: 0,
-    settings: { showDelay: 3, nextDelay: 3, bgm: 0.35, sfx: 0.7, autoSpeak: false, shuffle: false },
+    settings: { showDelay: 3, nextDelay: 3, bgm: 0.35, sfx: 0.7, autoSpeak: false, shuffle: false, reverse: false, fontSize: "m", goalMin: 10, goalWords: 20, notify: false, notifyTime: "19:00", listSort: "updated" },
     agent: { history: [] },
-    pos: {},                                               // pos[リスト名] = 続きから始める位置
+    pos: {},
+    goal: { done: "", notified: "" },                     // 目標を達成した日・通知した日                                               // pos[リスト名] = 続きから始める位置
   };
 }
 
@@ -111,3 +112,31 @@ export function parseWords(text) {
   return out.slice(0, 3000);
 }
 export const wordsToText = (words) => words.map((x) => (x.m ? `${x.w}, ${x.m}` : x.w)).join("\n");
+
+// 表（Excel・スプレッドシートからの貼り付け、CSV・TSV）を「英語, 意味」の行にする
+// 1列目が日本語で2列目が英語なら入れ替える。見出し行（word / 英単語 など）は飛ばす
+export function parseTable(text) {
+  const rows = [];
+  const isCsv = !/\t/.test(text) && /,/.test(text);
+  for (const line of String(text || "").split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const cells = isCsv ? splitCsv(line) : line.split("\t");
+    const c = cells.map((x) => x.trim()).filter((x, i) => x || i < 2);
+    if (!c[0]) continue;
+    let w = c[0], m = c[1] || "";
+    const jp = (s) => /[぀-ヿ一-鿿]/.test(s);
+    if (jp(w) && m && !jp(m)) [w, m] = [m, w];
+    if (/^(word|english|英単語|単語|英語)$/i.test(w) && /^(meaning|japanese|意味|日本語|訳)?$/i.test(m)) continue;
+    rows.push(m ? `${w}, ${m}` : w);
+  }
+  return rows.join("\n");
+}
+function splitCsv(line) {
+  const out = []; let cur = "", q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) { if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (ch === '"') q = false; else cur += ch; }
+    else if (ch === '"') q = true; else if (ch === ",") { out.push(cur); cur = ""; } else cur += ch;
+  }
+  out.push(cur); return out;
+}

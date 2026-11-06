@@ -6,13 +6,13 @@ import { go, onEnter } from "./router.js";
 import { tone, setBgmVolume, bgm } from "./audio.js";
 import { applySkin } from "./gacha.js";
 import { openShared } from "./lists.js";
-import "./view.js";
+import { resumeView } from "./view.js";
 import "./test.js";
 import "./stats.js";
 import "./agent.js";
 import { CHANGELOG } from "./changelog.js";
 
-export const VERSION = "1.1.0";
+export const VERSION = "1.2.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -54,7 +54,9 @@ function renderMain(arg) {
     <div class="t-item"><small>今日の学習</small><b>${fmtDuration(t.s)}</b></div>
     <div class="t-item"><small>今日見た単語</small><b>${t.w}</b></div>
     <div class="t-item"><small>連続学習</small><b>${streak}日</b></div>
-    <div class="t-item"><small>テスト正答率</small><b>${S.test.total ? Math.round(S.test.correct / S.test.total * 100) + "%" : "—"}</b></div>`;
+    <div class="t-item"><small>テスト正答率</small><b>${S.test.total ? Math.round(S.test.correct / S.test.total * 100) + "%" : "—"}</b></div>
+    ${goalHtml(t)}`;
+  renderResume();
   renderStamp(arg && arg.newStamp);
   updateDia();
   const p = agentProgress();
@@ -63,6 +65,75 @@ function renderMain(arg) {
   renderAccount();
 }
 onEnter("main", renderMain);
+
+// ================= 今日の目標 =================
+function goalHtml(t) {
+  const gm = S.settings.goalMin, gw = S.settings.goalWords;
+  if (!gm && !gw) return "";
+  const pm = gm ? Math.min(1, t.s / 60 / gm) : 1, pw = gw ? Math.min(1, t.w / gw) : 1;
+  const done = pm >= 1 && pw >= 1;
+  return `<div class="goal"><div class="goal-head"><b>🎯 今日の目標</b><span class="note">${done ? "達成！ おつかれさま 🎉" : "設定で変えられます"}</span></div>
+    ${gm ? `<div class="goal-row"><span>${Math.floor(t.s / 60)} / ${gm}分</span><div class="meter"><i style="width:${pm * 100}%"></i></div></div>` : ""}
+    ${gw ? `<div class="goal-row"><span>${t.w} / ${gw}語</span><div class="meter"><i style="width:${pw * 100}%"></i></div></div>` : ""}</div>`;
+}
+function checkGoal() {
+  const k = dayKey(), t = S.stats.days[k];
+  if (!t || S.goal.done === k) return;
+  const gm = S.settings.goalMin, gw = S.settings.goalWords;
+  if (!gm && !gw) return;
+  if ((!gm || t.s >= gm * 60) && (!gw || t.w >= gw)) { S.goal.done = k; save(); toast("🎯 今日の目標を達成しました！", 3000); tone("combo"); }
+}
+
+// ================= 途中の閲覧を再開 =================
+function renderResume() {
+  const r = S.resume, el = $("#resumeCard");
+  if (!r || !r.words || !r.words.length) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+    <div><p class="kicker">CONTINUE</p><b>${esc(r.title)}</b> <span class="note">${r.resumeAt + 1} / ${r.words.length}語目${r.reverse ? " ・ 意味→英語" : ""}</span></div>
+    <div class="row"><button class="btn sm ghost" id="resDrop">やめる</button><button class="btn pri" id="resGo">続きから再開</button></div></div>`;
+  $("#resGo").onclick = resumeView;
+  $("#resDrop").onclick = () => { delete S.resume; save(); renderResume(); };
+}
+
+// ================= お知らせ（ブラウザ通知） =================
+// Engdy を開いている間（裏のタブでも）に、決めた時刻になっても今日まだ学習していなければ知らせる
+setInterval(checkNotify, 30000);
+async function checkNotify() {
+  const st = S.settings;
+  if (!st.notify || !("Notification" in window) || Notification.permission !== "granted") return;
+  const k = dayKey(); if (S.goal.notified === k) return;
+  const [h, m] = (st.notifyTime || "19:00").split(":").map(Number);
+  const now = new Date(Date.now() + 9 * 3600e3);
+  if (now.getUTCHours() * 60 + now.getUTCMinutes() < h * 60 + m) return;
+  const t = S.stats.days[k];
+  if (t && t.s >= 60) return;
+  S.goal.notified = k; save();
+  const opt = { body: "今日の英単語はまだです。1周だけでもやってみよう！", icon: "icon.svg", tag: "engdy-daily" };
+  try {
+    const reg = navigator.serviceWorker && (await navigator.serviceWorker.getRegistration());
+    if (reg) reg.showNotification("Engdy", opt); else new Notification("Engdy", opt);
+  } catch (e) {}
+}
+
+// ================= ショートカット一覧 =================
+export function showKeys() {
+  const rows = [
+    ["閲覧", [["Space / Enter / →", "意味を表示・次へ"], ["←", "前の単語に戻る"], ["P", "一時停止（自動で進むのを止める）"], ["S", "発音を聞く"], ["Esc", "やめる"]]],
+    ["スマホの閲覧", [["右へスワイプ", "次へ"], ["左へスワイプ", "前に戻る"], ["タップ", "意味を表示・次へ"]]],
+    ["テスト", [["1〜4", "選択肢を選ぶ"], ["Enter", "書き取りで答える"]]],
+    ["どこでも", [["?", "この一覧を出す"], ["Esc", "ウィンドウを閉じる"]]],
+  ];
+  modal(`<p class="kicker">SHORTCUTS</p><h3>ショートカット</h3>${rows.map(([h, list]) => `<h3 class="sec" style="margin-top:12px">${h}</h3><table class="wtable keys">${list.map(([k, d]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(d)}</td></tr>`).join("")}</table>`).join("")}
+    <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn pri" data-close>OK</button></div>`);
+}
+$("#keysLink").onclick = showKeys;
+document.addEventListener("keydown", (e) => {
+  if (e.key === "?" && !(e.target.closest && e.target.closest("input,textarea")) && $("#modal").hidden) { e.preventDefault(); showKeys(); }
+});
+
+// ================= 文字サイズ =================
+export function applyFontSize() { document.documentElement.dataset.fs = S.settings.fontSize || "m"; }
 
 export function streakDays() {
   let n = 0, k = dayKey();
@@ -104,6 +175,7 @@ function enterApp() {
 let pushTimer, lastPushed = "";
 onSave(() => {
   updateDia();
+  checkGoal();
   if (!token()) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(pushDaily, 8000);
@@ -129,6 +201,16 @@ onEnter("settings", () => {
     <div class="set-row"><label>発音を自動で読み上げ<small>単語が出たときに英語の音声を流す</small></label><input type="checkbox" id="setSpeak" ${st.autoSpeak ? "checked" : ""}></div>
     <div class="set-row"><label>BGM の音量</label><input type="range" min="0" max="1" step="0.05" id="setBgm" value="${st.bgm}"></div>
     <div class="set-row"><label>効果音の音量</label><input type="range" min="0" max="1" step="0.05" id="setSfx" value="${st.sfx}"></div>
+    <div class="set-row"><label>文字の大きさ<small>閲覧とテストの単語・意味の大きさ</small></label><div class="seg" id="setFs">${[["s", "小"], ["m", "中"], ["l", "大"]].map(([v, t]) => `<button data-fs="${v}" class="${(st.fontSize || "m") === v ? "on" : ""}">${t}</button>`).join("")}</div></div>
+  </div>
+  <div class="card"><h3 class="sec">🎯 今日の目標</h3>
+    <div class="set-row"><label>学習時間<small>0 にすると目標にしない</small></label><span><input type="number" min="0" max="300" id="setGoalMin" value="${st.goalMin}" style="width:80px"> 分</span></div>
+    <div class="set-row"><label>見る単語の数<small>0 にすると目標にしない</small></label><span><input type="number" min="0" max="3000" id="setGoalWords" value="${st.goalWords}" style="width:80px"> 語</span></div>
+  </div>
+  <div class="card"><h3 class="sec">🔔 お知らせ</h3>
+    <div class="set-row"><label>学習のお知らせ<small>決めた時刻になっても今日まだ学習していないとき、通知で知らせます</small></label><input type="checkbox" id="setNotify" ${st.notify ? "checked" : ""}></div>
+    <div class="set-row"><label>時刻</label><input type="time" id="setNotifyTime" value="${st.notifyTime || "19:00"}"></div>
+    <p class="hint">※ 通知は Engdy を開いている間（ほかのタブを見ていても OK）だけ届きます。スマホでは「ホーム画面に追加」して開いておくと確実です。</p>
   </div>
   <div class="card"><h3 class="sec">データ</h3>
     <p class="hint">${me() ? "ログイン中なので、記録はかるわかGAMES のクラウドに自動で保存されます。" : "ゲストの記録はこのブラウザだけに保存されます。アカウントでログインすると、ほかの端末でも続きができます。"}</p>
@@ -143,6 +225,23 @@ onEnter("settings", () => {
   bind("#setSpeak", "autoSpeak");
   bind("#setBgm", "bgm", null, (v) => setBgmVolume(v));
   bind("#setSfx", "sfx", null, () => tone("click"));
+  $("#setFs").onclick = (e) => {
+    const b = e.target.closest("[data-fs]"); if (!b) return;
+    st.fontSize = b.dataset.fs; save(); applyFontSize();
+    $$("#setFs button").forEach((x) => x.classList.toggle("on", x === b));
+  };
+  const num = (id, key, max) => { const el = $(id); el.onchange = () => { st[key] = Math.max(0, Math.min(max, parseInt(el.value, 10) || 0)); el.value = st[key]; save(); }; };
+  num("#setGoalMin", "goalMin", 300); num("#setGoalWords", "goalWords", 3000);
+  $("#setNotifyTime").onchange = (e) => { st.notifyTime = e.target.value || "19:00"; S.goal.notified = ""; save(); };
+  $("#setNotify").onchange = async (e) => {
+    if (e.target.checked) {
+      if (!("Notification" in window)) { toast("このブラウザは通知に対応していません"); e.target.checked = false; return; }
+      const perm = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+      if (perm !== "granted") { toast("通知が許可されませんでした（ブラウザの設定で許可できます）", 3500); e.target.checked = false; return; }
+      st.notify = true; S.goal.notified = ""; toast("お知らせをオンにしました");
+    } else st.notify = false;
+    save();
+  };
   $("#resetAll").onclick = async () => {
     if (!(await confirmBox("記録をすべて消しますか？", "統計・スタンプ・ダイヤ・図鑑・単語リストがこの端末から消えます。元に戻せません。", "消す", true))) return;
     localStorage.removeItem("engdy_v1"); localStorage.removeItem("engdy_lists");
@@ -251,6 +350,9 @@ async function renderAdmin() {
 // ================= 起動 =================
 async function boot() {
   applySkin();
+  applyFontSize();
+  // ホーム画面に追加（PWA）・オフライン用
+  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
   const q = new URLSearchParams(location.search);
   // メールの「送信停止」リンク
   if (q.get("unsub")) {

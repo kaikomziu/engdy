@@ -1,6 +1,6 @@
 // リスト制作（作る・保存・.engdy・公開）と、閲覧のリスト選び
 import { $, $$, esc, toast, modal, confirmBox, download, readFile, shuffle } from "./util.js";
-import { S, loadLists, saveLists, parseWords, wordsToText } from "./store.js";
+import { S, save, loadLists, saveLists, parseWords, wordsToText, parseTable } from "./store.js";
 import { rpc, fn, token, reasonText } from "./api.js";
 import { seal, open } from "./crypto.js";
 import { go, onEnter } from "./router.js";
@@ -17,11 +17,29 @@ const VIS = { public: "全体公開", password: "パスワード", url: "URL限�
 // ================= リスト制作 =================
 onEnter("create", () => { lists = loadLists(); if (!cur()) curId = lists[0] ? lists[0].id : null; fillEditor(); renderMyLists(); });
 
-function renderMyLists() {
-  $("#myLists").innerHTML = lists.length
-    ? lists.map((l) => `<li data-id="${l.id}" class="${l.id === curId ? "on" : ""}"><b>${esc(l.title || "（無題）")}</b><small>${l.words.length}語${l.remote ? ` ・ <span class="badge ${l.remote.vis === "password" ? "pw" : l.remote.vis === "url" ? "url" : ""}">${VIS[l.remote.vis]}</span>` : ""}</small></li>`).join("")
-    : `<li class="empty" style="cursor:default">まだリストがありません</li>`;
+// 並べ替え・検索
+function view(listArr, q) {
+  q = (q || "").trim().toLowerCase();
+  let a = listArr.filter((l) => !q || l.title.toLowerCase().includes(q) || l.words.some((x) => x.w.toLowerCase() === q));
+  const mode = S.settings.listSort || "updated";
+  a = a.slice().sort(mode === "name" ? (x, y) => x.title.localeCompare(y.title, "ja") : mode === "count" ? (x, y) => y.words.length - x.words.length : (x, y) => (y.updated || 0) - (x.updated || 0));
+  return a;
 }
+const sortOpts = () => [["updated", "更新順"], ["name", "名前順"], ["count", "語数順"]].map(([v, t]) => `<option value="${v}" ${S.settings.listSort === v ? "selected" : ""}>${t}</option>`).join("");
+export function bindListTools(searchSel, sortSel, rerender) {
+  const sr = $(searchSel), so = $(sortSel);
+  so.innerHTML = sortOpts();
+  sr.oninput = rerender;
+  so.onchange = () => { S.settings.listSort = so.value; save(); document.querySelectorAll(".list-sort").forEach((x) => (x.value = so.value)); rerender(); };
+}
+
+function renderMyLists() {
+  const shown = view(lists, $("#mySearch").value);
+  $("#myLists").innerHTML = shown.length
+    ? shown.map((l) => `<li data-id="${l.id}" class="${l.id === curId ? "on" : ""}"><b>${esc(l.title || "（無題）")}</b><small>${l.words.length}語${l.remote ? ` ・ <span class="badge ${l.remote.vis === "password" ? "pw" : l.remote.vis === "url" ? "url" : ""}">${VIS[l.remote.vis]}</span>` : ""}</small></li>`).join("")
+    : `<li class="empty" style="cursor:default">${lists.length ? "見つかりません" : "まだリストがありません"}</li>`;
+}
+bindListTools("#mySearch", "#mySort", () => renderMyLists());
 $("#myLists").onclick = (e) => {
   const li = e.target.closest("li[data-id]"); if (!li) return;
   if (dirty() && !confirm("保存していない変更があります。切り替えますか？")) return;
@@ -80,6 +98,26 @@ function saveLocal(silent) {
 }
 $("#saveList").onclick = () => saveLocal();
 
+$("#dupList").onclick = () => {
+  const d = collect(); if (!d) return;
+  const l = { id: uid(), title: (d.title + " のコピー").slice(0, 60), words: d.words.map((x) => ({ ...x })), updated: Date.now() };
+  lists.unshift(l); saveLists(lists); curId = l.id; fillEditor(); renderMyLists();
+  toast("複製しました（公開の設定は引き継ぎません）");
+};
+
+// Excel・スプレッドシートの表を貼り付けたら「英語, 意味」に直す
+$("#listWords").addEventListener("paste", (e) => {
+  const t = (e.clipboardData || window.clipboardData).getData("text");
+  if (!t || !/\t/.test(t)) return;
+  e.preventDefault();
+  const conv = parseTable(t), ta = e.target;
+  const a = ta.selectionStart, b = ta.selectionEnd;
+  ta.value = ta.value.slice(0, a) + conv + ta.value.slice(b);
+  ta.selectionStart = ta.selectionEnd = a + conv.length;
+  renderPreview();
+  toast(`表から ${conv.split("\n").filter(Boolean).length}行 を読み込みました`);
+});
+
 $("#deleteList").onclick = async () => {
   const l = cur(); if (!l) { fillEditor(); return; }
   if (!(await confirmBox("このリストを削除しますか？", `「${l.title}」をこの端末から削除します。${l.remote ? "公開も取り消します。" : ""}`, "削除", true))) return;
@@ -124,6 +162,12 @@ $("#fileInput").onchange = async (e) => {
   toast(`「${l.title}」を読み込みました`);
 };
 async function readEngdy(file) {
+  if (/\.(csv|tsv|txt)$/i.test(file.name)) {
+    const text = await readFile(file);
+    const words = parseWords(parseTable(text));
+    if (!words.length) { toast("単語が見つかりませんでした"); return null; }
+    return { title: file.name.replace(/\.(csv|tsv|txt)$/i, "").slice(0, 60), words };
+  }
   try {
     const d = await open(await readFile(file));
     if (!d || !Array.isArray(d.words)) throw 0;
@@ -181,10 +225,12 @@ $("#browseTabs").onclick = (e) => {
   if (t.dataset.tab === "public") loadPublic();
 };
 function renderPickMine() {
-  $("#pickMine").innerHTML = lists.length
-    ? lists.map((l) => `<li><div class="pk-main"><b>${esc(l.title)}</b><small>${l.words.length}語</small></div><button class="btn pri sm" data-start="${l.id}">開始</button></li>`).join("")
-    : `<li class="empty" style="border:none">まだリストがありません。<br><button class="btn sm" data-go="create" style="margin-top:8px">リストを作る</button></li>`;
+  const shown = view(lists, $("#pickSearch").value);
+  $("#pickMine").innerHTML = shown.length
+    ? shown.map((l) => `<li><div class="pk-main"><b>${esc(l.title)}</b><small>${l.words.length}語</small></div><button class="btn pri sm" data-start="${l.id}">開始</button></li>`).join("")
+    : lists.length ? `<li class="empty" style="border:none">見つかりません</li>` : `<li class="empty" style="border:none">まだリストがありません。<br><button class="btn sm" data-go="create" style="margin-top:8px">リストを作る</button></li>`;
 }
+bindListTools("#pickSearch", "#pickSort", () => renderPickMine());
 $("#pickMine").onclick = (e) => {
   const b = e.target.closest("[data-start]"); if (!b) return;
   const l = lists.find((x) => x.id === b.dataset.start);
@@ -255,7 +301,7 @@ export async function startList(list) {
   if (!usable.length) { toast("単語がありません"); return; }
   const N = usable.length;
   const full = { title: list.title, words: usable };
-  if (N <= 5) { launch(full, usable, null, `${N}語`); return; }
+  if (N <= 5) { launch(full, usable, null, `${N}語`, !!S.settings.reverse); return; }
 
   const posKey = list.title;
   const pos = (S.pos && S.pos[posKey]) || 0;
@@ -266,6 +312,8 @@ export async function startList(list) {
     <div class="field"><span>やる語数</span>
       <div class="row wrap"><div class="seg" id="stN">${presets.map((n) => `<button data-n="${n}" class="${n === def ? "on" : ""}">${n}</button>`).join("")}<button data-n="${N}" class="${def === N ? "on" : ""}">全部</button></div>
       <span class="row"><input id="stNum" type="number" min="1" max="${N}" value="${def}" style="width:90px"> 語</span></div></div>
+    <div class="field"><span>向き</span>
+      <div class="seg" id="stDir"><button data-r="0" class="${S.settings.reverse ? "" : "on"}">英語 → 意味</button><button data-r="1" class="${S.settings.reverse ? "on" : ""}">意味 → 英語</button></div></div>
     <div class="field"><span>出し方</span>
       ${pos > 0 && pos < N ? `<label class="radio"><input type="radio" name="ord" value="cont" checked><span><b>続きから</b><small>前回の続き（${pos + 1}語目〜）</small></span></label>` : ""}
       <label class="radio"><input type="radio" name="ord" value="head" ${pos > 0 && pos < N ? "" : "checked"}><span><b>はじめから順番に</b><small>1語目から</small></span></label>
@@ -280,16 +328,22 @@ export async function startList(list) {
         const b = e.target.closest("[data-n]"); if (!b) return;
         num.value = b.dataset.n; c.querySelectorAll("#stN button").forEach((x) => x.classList.toggle("on", x === b));
       };
+      c.querySelector("#stDir").onclick = (e) => {
+        const b = e.target.closest("[data-r]"); if (!b) return;
+        c.querySelectorAll("#stDir button").forEach((x) => x.classList.toggle("on", x === b));
+      };
       num.oninput = () => c.querySelectorAll("#stN button").forEach((x) => x.classList.toggle("on", x.dataset.n === num.value));
       c.querySelector("#stFrom").onfocus = () => (c.querySelector('input[value="from"]').checked = true);
       c.querySelector("#stGo").onclick = () => {
         const n = Math.max(1, Math.min(N, parseInt(num.value, 10) || def));
         const ord = c.querySelector('input[name="ord"]:checked').value;
         const from = Math.max(1, Math.min(N, parseInt(c.querySelector("#stFrom").value, 10) || 1)) - 1;
-        close({ n, ord, from });
+        const reverse = c.querySelector("#stDir .on").dataset.r === "1";
+        close({ n, ord, from, reverse });
       };
     });
   if (!res) return;
+  S.settings.reverse = res.reverse; save();
 
   let picked, next = null, start = 0;
   if (res.ord === "rand") picked = shuffle(usable).slice(0, res.n);
@@ -303,9 +357,9 @@ export async function startList(list) {
   }
   const label = res.ord === "rand" ? `ランダム ${picked.length}語` : res.ord === "weak" ? `苦手優先 ${picked.length}語`
     : `${start + 1}〜${((start + res.n - 1) % N) + 1}語目（全${N}語）`;
-  launch(full, picked, next == null ? null : { key: posKey, next }, label);
+  launch(full, picked, next == null ? null : { key: posKey, next }, label, res.reverse);
 }
-function launch(full, words, pos, label) {
+function launch(full, words, pos, label, reverse) {
   if (words.some((x) => !x.m)) toast("意味のない単語は、意味の欄が空のまま表示されます", 3000);
-  go("view", { title: full.title, words, full, pos, label });
+  go("view", { title: full.title, words, full, pos, label, reverse });
 }
