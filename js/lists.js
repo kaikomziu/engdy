@@ -1,6 +1,6 @@
 // リスト制作（作る・保存・.engdy・公開）と、閲覧のリスト選び
-import { $, $$, esc, toast, modal, confirmBox, download, readFile } from "./util.js";
-import { loadLists, saveLists, parseWords, wordsToText } from "./store.js";
+import { $, $$, esc, toast, modal, confirmBox, download, readFile, shuffle } from "./util.js";
+import { S, loadLists, saveLists, parseWords, wordsToText } from "./store.js";
 import { rpc, fn, token, reasonText } from "./api.js";
 import { seal, open } from "./crypto.js";
 import { go, onEnter } from "./router.js";
@@ -249,10 +249,63 @@ export async function openShared(code, password) {
   if (ok === "go") startList({ title: r.title, words });
 }
 
-// 閲覧を始める（view.js が受け取る）
-export function startList(list) {
+// 閲覧を始める。単語が多いときは「何語やるか・どこからやるか」を選んでから view.js へ
+export async function startList(list) {
   const usable = list.words.filter((x) => x.w);
   if (!usable.length) { toast("単語がありません"); return; }
-  if (usable.some((x) => !x.m)) toast("意味のない単語は、意味の欄が空のまま表示されます", 3000);
-  go("view", { title: list.title, words: usable });
+  const N = usable.length;
+  const full = { title: list.title, words: usable };
+  if (N <= 5) { launch(full, usable, null, `${N}語`); return; }
+
+  const posKey = list.title;
+  const pos = (S.pos && S.pos[posKey]) || 0;
+  const def = Math.min(N, 20);
+  const presets = [10, 20, 30, 50, 100].filter((n) => n < N);
+  const res = await modal(`<p class="kicker">START</p><h3>${esc(list.title)}</h3>
+    <p class="hint">全 <b>${N}</b> 語のうち、何語やるかを選んでください。</p>
+    <div class="field"><span>やる語数</span>
+      <div class="row wrap"><div class="seg" id="stN">${presets.map((n) => `<button data-n="${n}" class="${n === def ? "on" : ""}">${n}</button>`).join("")}<button data-n="${N}" class="${def === N ? "on" : ""}">全部</button></div>
+      <span class="row"><input id="stNum" type="number" min="1" max="${N}" value="${def}" style="width:90px"> 語</span></div></div>
+    <div class="field"><span>出し方</span>
+      ${pos > 0 && pos < N ? `<label class="radio"><input type="radio" name="ord" value="cont" checked><span><b>続きから</b><small>前回の続き（${pos + 1}語目〜）</small></span></label>` : ""}
+      <label class="radio"><input type="radio" name="ord" value="head" ${pos > 0 && pos < N ? "" : "checked"}><span><b>はじめから順番に</b><small>1語目から</small></span></label>
+      <label class="radio"><input type="radio" name="ord" value="from"><span><b>指定した番号から</b><small><input id="stFrom" type="number" min="1" max="${N}" value="1" style="width:80px;padding:4px 8px"> 語目から</small></span></label>
+      <label class="radio"><input type="radio" name="ord" value="rand"><span><b>ランダム</b><small>全体からばらばらに選ぶ</small></span></label>
+      <label class="radio"><input type="radio" name="ord" value="weak"><span><b>まだ見ていない・苦手を優先</b><small>見た回数が少ない語と、テストでまちがえた語から</small></span></label>
+    </div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" data-close>キャンセル</button><button class="btn pri" id="stGo">開始</button></div>`,
+    (c, close) => {
+      const num = c.querySelector("#stNum");
+      c.querySelector("#stN").onclick = (e) => {
+        const b = e.target.closest("[data-n]"); if (!b) return;
+        num.value = b.dataset.n; c.querySelectorAll("#stN button").forEach((x) => x.classList.toggle("on", x === b));
+      };
+      num.oninput = () => c.querySelectorAll("#stN button").forEach((x) => x.classList.toggle("on", x.dataset.n === num.value));
+      c.querySelector("#stFrom").onfocus = () => (c.querySelector('input[value="from"]').checked = true);
+      c.querySelector("#stGo").onclick = () => {
+        const n = Math.max(1, Math.min(N, parseInt(num.value, 10) || def));
+        const ord = c.querySelector('input[name="ord"]:checked').value;
+        const from = Math.max(1, Math.min(N, parseInt(c.querySelector("#stFrom").value, 10) || 1)) - 1;
+        close({ n, ord, from });
+      };
+    });
+  if (!res) return;
+
+  let picked, next = null, start = 0;
+  if (res.ord === "rand") picked = shuffle(usable).slice(0, res.n);
+  else if (res.ord === "weak") {
+    const score = (x) => { const r = S.words[x.w]; if (!r) return -1000; return r.seen * 2 - r.ng * 5 + r.ok; };
+    picked = shuffle(usable).sort((a, b) => score(a) - score(b)).slice(0, res.n);
+  } else {
+    start = res.ord === "cont" ? pos : res.ord === "from" ? res.from : 0;
+    picked = Array.from({ length: res.n }, (_, i) => usable[(start + i) % N]);
+    next = (start + res.n) % N;
+  }
+  const label = res.ord === "rand" ? `ランダム ${picked.length}語` : res.ord === "weak" ? `苦手優先 ${picked.length}語`
+    : `${start + 1}〜${((start + res.n - 1) % N) + 1}語目（全${N}語）`;
+  launch(full, picked, next == null ? null : { key: posKey, next }, label);
+}
+function launch(full, words, pos, label) {
+  if (words.some((x) => !x.m)) toast("意味のない単語は、意味の欄が空のまま表示されます", 3000);
+  go("view", { title: full.title, words, full, pos, label });
 }

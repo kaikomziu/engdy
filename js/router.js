@@ -4,7 +4,7 @@ import { bgm } from "./audio.js";
 
 const hooks = {};      // 画面に入ったときに呼ぶ関数
 const leaves = {};     // 画面を出るときに呼ぶ関数
-const MUSIC = { login: "menu", main: "menu", create: "menu", browse: "menu", stats: "menu", collection: "menu", parent: "menu", settings: "menu", credits: "menu", admin: "menu", view: "study", viewdone: "study", test: "test", agent: "study", gacha: "" };
+const MUSIC = { login: "menu", main: "menu", create: "menu", browse: "menu", stats: "menu", collection: "menu", parent: "menu", settings: "menu", credits: "menu", changelog: "menu", admin: "menu", view: "study", viewdone: "study", test: "test", agent: "study", gacha: "" };
 let current = "";
 
 export const onEnter = (name, f) => (hooks[name] = f);

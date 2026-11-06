@@ -7,7 +7,7 @@
 <meta name="description" content="Engdy（いんぐてぃー）は、自分で作った単語リストを見て・テストして・定着させる英語学習アプリです。かるわかGAMES。">
 <meta name="theme-color" content="#f5f3ee">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="css/style.css?v=1.0.0">
+<link rel="stylesheet" href="css/style.css?v=1.1.0">
 <script src="https://kaikomziu.github.io/game-links/js/karuwaka-account.js" data-game="engdy" data-keys="engdy_v1,engdy_lists" data-badge="off"></script>
 </head>
 <body>
@@ -53,6 +53,7 @@
       <button class="link" data-go="collection">図鑑・きせかえ</button>
       <button class="link" data-go="parent">保護者メール</button>
       <button class="link" data-go="settings">設定</button>
+      <button class="link" data-go="changelog">更新履歴</button>
       <button class="link" data-go="credits">クレジット</button>
       <button class="link admin-only" data-go="admin" hidden>admin</button>
     </div>
@@ -205,9 +206,15 @@
         <dt>効果音</dt><dd>OtoLogic（CC BY 4.0）<br>効果音ラボ</dd>
         <dt>BGM</dt><dd>ふぁいの音楽置き場（fai-musics）<br>「ほっこりひととき」「静かな図書室で」「おひるすぎ」</dd>
       </dl>
-      <p class="hint">バージョン <span class="ver">v1.0.0</span></p>
+      <p class="hint">バージョン <span class="ver">v1.1.0</span></p>
     </div>
   </div>
+</section>
+
+<!-- ===== 更新履歴 ===== -->
+<section id="s-changelog" class="screen">
+  <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">CHANGELOG</p><h2>更新履歴</h2></div></header>
+  <div class="page narrow" id="changelogBody"></div>
 </section>
 
 <!-- ===== admin ===== -->
@@ -219,6 +226,7 @@
 <div id="modal" class="modal" hidden><div class="modal-card card" id="modalCard"></div></div>
 <div id="toast" class="toast" hidden></div>
 
-<script type="module" src="js/app.js?v=1.0.0"></script>
+<script type="importmap">{"imports":{"./js/agent.js":"./js/agent.js?v=1.1.0","./js/api.js":"./js/api.js?v=1.1.0","./js/app.js":"./js/app.js?v=1.1.0","./js/audio.js":"./js/audio.js?v=1.1.0","./js/changelog.js":"./js/changelog.js?v=1.1.0","./js/crypto.js":"./js/crypto.js?v=1.1.0","./js/gacha.js":"./js/gacha.js?v=1.1.0","./js/items.js":"./js/items.js?v=1.1.0","./js/lists.js":"./js/lists.js?v=1.1.0","./js/router.js":"./js/router.js?v=1.1.0","./js/stats.js":"./js/stats.js?v=1.1.0","./js/store.js":"./js/store.js?v=1.1.0","./js/test.js":"./js/test.js?v=1.1.0","./js/util.js":"./js/util.js?v=1.1.0","./js/view.js":"./js/view.js?v=1.1.0"}}</script>
+<script type="module" src="js/app.js?v=1.1.0"></script>
 </body>
 </html>

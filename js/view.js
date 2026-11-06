@@ -12,8 +12,8 @@ let V = null;     // いまの閲覧
 
 onEnter("view", (list) => {
   if (!list) { go("browse"); return; }
-  V = { title: list.title, words: list.words, src: list, i: 0, phase: "word", phaseAt: 0, seconds: 0, seen: 0, lastInput: Date.now(), paused: false, timer: 0, last: performance.now() };
-  $("#viewTitle").textContent = list.title;
+  V = { title: list.title, words: list.words, src: list.full || list, pos: list.pos || null, label: list.label || "", i: 0, phase: "word", phaseAt: 0, seconds: 0, seen: 0, lastInput: Date.now(), paused: false, timer: 0, last: performance.now() };
+  $("#viewTitle").textContent = list.label ? `${list.title} ・ ${list.label}` : list.title;
   $("#idleBox").hidden = true;
   showWord();
   V.timer = setInterval(tick, 200);
@@ -103,16 +103,17 @@ function quit() {
 function finish() {
   $("#viewBar").style.width = "100%";
   S.stats.laps++; today().l++;
+  if (V.pos) S.pos[V.pos.key] = V.pos.next;   // 次は続きから
   const lap = V.words.length >= MIN_WORDS_FOR_STAMP ? awardLap() : { stamped: false, gained: 0, tooShort: true };
   save(true); updateDia();
   const done = V; stop(); V = null;
   tone(lap.stamped ? "stamp" : "ok");
-  $("#viewDone").innerHTML = `<p class="kicker">LAP COMPLETE</p><h3>${esc(done.title)} を1周しました</h3>
+  $("#viewDone").innerHTML = `<p class="kicker">LAP COMPLETE</p><h3>${esc(done.title)} ${done.label && done.words.length < done.src.words.length ? `${done.words.length}語 完了` : "を1周しました"}</h3>${done.label ? `<p class="hint">${esc(done.label)}</p>` : ""}
     <div class="done-stats"><div><small>単語</small><b>${done.words.length}</b></div><div><small>学習時間</small><b>${fmtDuration(done.seconds)}</b></div><div><small>今日の合計</small><b>${fmtDuration(today().s)}</b></div></div>
     ${lap.stamped ? `<div class="gain">🎉 今日のスタンプを押しました！ 💎 +${lap.gained}${lap.cardDone ? "<br>スタンプカードがいっぱいになりました（ボーナス込み）" : ""}</div>`
       : lap.tooShort ? `<p class="hint">スタンプは ${MIN_WORDS_FOR_STAMP}語以上のリストを1周するともらえます。</p>` : `<p class="hint">今日のスタンプは押してあります。また明日！</p>`}
     <div class="row wrap" style="justify-content:center;margin-top:14px">
-      <button class="btn" id="vdAgain">もう1周</button>
+      <button class="btn" id="vdAgain">${done.pos ? "続きをやる" : "もう1周"}</button>
       <button class="btn" data-go="test">テストする</button>
       <button class="btn pri" id="vdHome">メインへ</button></div>`;
   go("viewdone");

@@ -16,6 +16,7 @@ function fresh() {
     pity: 0, pulls: 0,
     settings: { showDelay: 3, nextDelay: 3, bgm: 0.35, sfx: 0.7, autoSpeak: false, shuffle: false },
     agent: { history: [] },
+    pos: {},                                               // pos[リスト名] = 続きから始める位置
   };
 }
 

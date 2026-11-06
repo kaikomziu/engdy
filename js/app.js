@@ -10,8 +10,9 @@ import "./view.js";
 import "./test.js";
 import "./stats.js";
 import "./agent.js";
+import { CHANGELOG } from "./changelog.js";
 
-export const VERSION = "1.0.0";
+export const VERSION = "1.1.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -147,6 +148,12 @@ onEnter("settings", () => {
     localStorage.removeItem("engdy_v1"); localStorage.removeItem("engdy_lists");
     location.reload();
   };
+});
+
+// ================= 更新履歴 =================
+onEnter("changelog", () => {
+  $("#changelogBody").innerHTML = CHANGELOG.map((c) => `<div class="card log"><div class="log-head"><b>v${esc(c.version)}</b><span class="note">${esc(c.date)}</span></div>
+    <ul>${c.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></div>`).join("");
 });
 
 // ================= 保護者メール =================
