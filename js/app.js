@@ -5,7 +5,8 @@ import { rpc, fn, token, me, reasonText } from "./api.js";
 import { go, onEnter } from "./router.js";
 import { tone, setBgmVolume, bgm } from "./audio.js";
 import { applySkin } from "./gacha.js";
-import { openShared } from "./lists.js";
+import { openShared, addSample, startLast, lastListName } from "./lists.js";
+import { loadLists, testPool } from "./store.js";
 import { resumeView } from "./view.js";
 import "./test.js";
 import "./stats.js";
@@ -13,7 +14,7 @@ import "./agent.js";
 import { CHANGELOG } from "./changelog.js";
 import "./memo.js";
 
-export const VERSION = "1.4.0";
+export const VERSION = "1.5.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -58,6 +59,7 @@ function renderMain(arg) {
     <div class="t-item"><small>テスト正答率</small><b>${S.test.total ? Math.round(S.test.correct / S.test.total * 100) + "%" : "—"}</b></div>
     ${goalHtml(t)}`;
   renderResume();
+  renderNext();
   renderStamp(arg && arg.newStamp);
   updateDia();
   const p = agentProgress();
@@ -85,6 +87,44 @@ function checkGoal() {
   if ((!gm || t.s >= gm * 60) && (!gw || t.w >= gw)) { S.goal.done = k; save(); toast("🎯 今日の目標を達成しました！", 3000); tone("combo"); }
 }
 
+// ================= 次にやること =================
+function renderNext() {
+  const el = $("#nextCard");
+  if (S.resume && S.resume.words && S.resume.words.length) { el.hidden = true; return; }
+  const lists = loadLists(), t = today(), lapped = S.stamp.last === dayKey();
+  let html = "";
+  if (!lists.length) {
+    html = `<div><p class="kicker">NEXT</p><b>まずは単語リストを用意しよう</b><p class="note">自分で作るか、サンプル（中学生向け150語）を入れてすぐ始められます。</p></div>
+      <div class="row wrap"><button class="btn" data-go="create">リストを作る</button><button class="btn pri" id="nxSample">サンプルを入れる</button></div>`;
+  } else if (!lapped) {
+    const name = lastListName();
+    html = `<div><p class="kicker">NEXT</p><b>今日の閲覧がまだです</b><p class="note">1周するとスタンプと 💎 がもらえます。</p></div>
+      <div class="row wrap">${name ? `<button class="btn pri" id="nxLast">「${esc(name.length > 14 ? name.slice(0, 14) + "…" : name)}」で始める</button>` : ""}<button class="btn ${name ? "" : "pri"}" data-go="browse">リストを選ぶ</button></div>`;
+  } else if (testPool().length >= 4 && !t.tt) {
+    html = `<div><p class="kicker">NEXT</p><b>見た単語をテストしよう</b><p class="note">テストで覚えたかどうか確かめると、苦手な単語がわかります。</p></div>
+      <div class="row wrap"><button class="btn pri" data-go="test">テストする</button></div>`;
+  } else {
+    el.hidden = true; return;
+  }
+  el.hidden = false; el.innerHTML = html;
+  const s = $("#nxSample"); if (s) s.onclick = () => { addSample(); toast("サンプルの単語リスト（150語）を入れました"); renderNext(); };
+  const l = $("#nxLast"); if (l) l.onclick = () => { if (!startLast()) go("browse"); };
+}
+
+// ================= はじめての人へ =================
+function welcome() {
+  if (S.welcomed) return;
+  S.welcomed = true; save();
+  modal(`<p class="kicker">WELCOME</p><h3>Engdy へようこそ！</h3>
+    <ol class="steps">
+      <li><b>リストを作る</b><span>覚えたい単語を1行に1つ。サンプルも入っています。</span></li>
+      <li><b>閲覧する</b><span>単語 → 意味 の順に、数秒ずつ見ていきます。毎日1周でスタンプ。</span></li>
+      <li><b>テストする</b><span>見た単語を4択や書き取りで確かめます。</span></li>
+    </ol>
+    <p class="hint">ダイヤがたまったらガチャ、テストを続けると専属エージェントが使えるようになります。</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn pri" data-close>はじめる</button></div>`);
+}
+
 // ================= 途中の閲覧を再開 =================
 function renderResume() {
   const r = S.resume, el = $("#resumeCard");
@@ -94,7 +134,7 @@ function renderResume() {
     <div><p class="kicker">CONTINUE</p><b>${esc(r.title)}</b> <span class="note">${r.resumeAt + 1} / ${r.words.length}語目${r.reverse ? " ・ 意味→英語" : ""}</span></div>
     <div class="row"><button class="btn sm ghost" id="resDrop">やめる</button><button class="btn pri" id="resGo">続きから再開</button></div></div>`;
   $("#resGo").onclick = resumeView;
-  $("#resDrop").onclick = () => { delete S.resume; save(); renderResume(); };
+  $("#resDrop").onclick = () => { delete S.resume; save(); renderResume(); renderNext(); };
 }
 
 // ================= お知らせ（ブラウザ通知） =================
@@ -168,7 +208,10 @@ $("#s-login").addEventListener("click", (e) => {
 
 let pendingShared = null;
 function enterApp() {
+  // はじめての人には、サンプルの単語リストを入れておく
+  if (!S.sampleAdded) { if (!loadLists().length) addSample(); S.sampleAdded = true; save(); }
   go("main");
+  if (!pendingShared) setTimeout(welcome, 400);
   if (pendingShared) { const c = pendingShared; pendingShared = null; openShared(c); }
 }
 

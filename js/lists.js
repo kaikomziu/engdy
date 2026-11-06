@@ -3,8 +3,9 @@ import { $, $$, esc, toast, modal, confirmBox, download, readFile, shuffle } fro
 import { S, save, loadLists, saveLists, parseWords, wordsToText, parseTable } from "./store.js";
 import { rpc, fn, token, reasonText } from "./api.js";
 import { seal, open } from "./crypto.js";
-import { go, onEnter } from "./router.js";
+import { go, onEnter, onLeave } from "./router.js";
 import { tone } from "./audio.js";
+import { SAMPLE_TITLE, SAMPLE_WORDS } from "./sample.js";
 
 const SHARE_BASE = "https://kaikomziu.github.io/engdy/";
 let lists = loadLists();
@@ -13,6 +14,15 @@ const uid = () => "l" + Date.now().toString(36) + Math.random().toString(36).sli
 const cur = () => lists.find((l) => l.id === curId) || null;
 const shareUrl = (code) => `${SHARE_BASE}?list=${encodeURIComponent(code)}`;
 const VIS = { public: "全体公開", password: "パスワード", url: "URL限定" };
+
+// サンプルの単語リストを入れる（まだなければ）
+export function addSample() {
+  lists = loadLists();
+  if (lists.some((l) => l.title === SAMPLE_TITLE)) return false;
+  lists.push({ id: uid(), title: SAMPLE_TITLE, words: SAMPLE_WORDS.map((x) => ({ ...x })), updated: 1 });
+  saveLists(lists);
+  return true;
+}
 
 // ================= リスト制作 =================
 onEnter("create", () => { lists = loadLists(); if (!cur()) curId = lists[0] ? lists[0].id : null; fillEditor(); renderMyLists(); });
@@ -42,6 +52,7 @@ function renderMyLists() {
 bindListTools("#mySearch", "#mySort", () => renderMyLists());
 $("#myLists").onclick = (e) => {
   const li = e.target.closest("li[data-id]"); if (!li) return;
+  flushAuto();
   if (dirty() && !confirm("保存していない変更があります。切り替えますか？")) return;
   curId = li.dataset.id; fillEditor(); renderMyLists();
 };
@@ -51,6 +62,7 @@ function fillEditor() {
   $("#listTitle").value = l ? l.title : "";
   $("#listWords").value = l ? wordsToText(l.words) : "";
   renderPreview(); renderPubInfo();
+  setState(l ? "✓ 保存済み" : "単語を入れると自動で保存されます", l ? "ok" : "");
 }
 function dirty() {
   const l = cur(); const t = $("#listTitle").value.trim(), w = $("#listWords").value.trim();
@@ -73,9 +85,34 @@ function renderPubInfo() {
   const c = $("#copyUrl"); if (c) c.onclick = () => navigator.clipboard.writeText(shareUrl(l.remote.code)).then(() => toast("コピーしました"));
   const u = $("#unpublish"); if (u) u.onclick = unpublish;
 }
-let pv; $("#listWords").addEventListener("input", () => { clearTimeout(pv); pv = setTimeout(renderPreview, 200); });
+let pv, autoT;
+function setState(t, cls = "") { const el = $("#saveState"); el.textContent = t; el.className = "save-state " + cls; }
+// 書いたら少し待って自動で保存（タイトルがなければ「無題のリスト」）
+function autosave() {
+  clearTimeout(autoT);
+  setState("編集中…");
+  autoT = setTimeout(() => {
+    autoT = null;
+    const words = parseWords($("#listWords").value);
+    if (!words.length) { setState(cur() ? "" : "単語を入れると自動で保存されます"); return; }
+    if (!$("#listTitle").value.trim()) $("#listTitle").value = "無題のリスト";
+    if (saveLocal(true)) setState("✓ 自動で保存しました", "ok");
+  }, 900);
+}
+// 切り替える前・画面を出る前に、待っている自動保存をすぐ行う
+function flushAuto() {
+  if (!autoT) return;
+  clearTimeout(autoT); autoT = null;
+  if (!parseWords($("#listWords").value).length) return;
+  if (!$("#listTitle").value.trim()) $("#listTitle").value = "無題のリスト";
+  saveLocal(true);
+}
+onLeave("create", flushAuto);
+$("#listWords").addEventListener("input", () => { clearTimeout(pv); pv = setTimeout(renderPreview, 200); autosave(); });
+$("#listTitle").addEventListener("input", () => { if (cur()) autosave(); });
 
 $("#newList").onclick = () => {
+  flushAuto();
   if (dirty() && !confirm("保存していない変更があります。新しく作りますか？")) return;
   curId = null; fillEditor(); renderMyLists(); $("#listTitle").focus();
 };
@@ -93,7 +130,7 @@ function saveLocal(silent) {
   if (!l) { l = { id: uid(), title: "", words: [], updated: 0 }; lists.unshift(l); curId = l.id; }
   l.title = d.title; l.words = d.words; l.updated = Date.now();
   saveLists(lists); renderMyLists();
-  if (!silent) { toast("保存しました"); tone("ok"); }
+  if (!silent) { toast("保存しました"); tone("ok"); setState("✓ 保存済み", "ok"); }
   return l;
 }
 $("#saveList").onclick = () => saveLocal();
@@ -228,13 +265,14 @@ function renderPickMine() {
   const shown = view(lists, $("#pickSearch").value);
   $("#pickMine").innerHTML = shown.length
     ? shown.map((l) => `<li><div class="pk-main"><b>${esc(l.title)}</b><small>${l.words.length}語</small></div><button class="btn pri sm" data-start="${l.id}">開始</button></li>`).join("")
-    : lists.length ? `<li class="empty" style="border:none">見つかりません</li>` : `<li class="empty" style="border:none">まだリストがありません。<br><button class="btn sm" data-go="create" style="margin-top:8px">リストを作る</button></li>`;
+    : lists.length ? `<li class="empty" style="border:none">見つかりません</li>` : `<li class="empty" style="border:none">まだリストがありません。<br><span class="row" style="justify-content:center;margin-top:8px"><button class="btn sm" data-go="create">リストを作る</button><button class="btn sm pri" id="addSampleB">サンプルを入れる</button></span></li>`;
 }
 bindListTools("#pickSearch", "#pickSort", () => renderPickMine());
+$("#pickMine").addEventListener("click", (e) => { if (e.target.closest("#addSampleB")) { addSample(); lists = loadLists(); renderPickMine(); toast("サンプルの単語リスト（150語）を入れました"); } });
 $("#pickMine").onclick = (e) => {
   const b = e.target.closest("[data-start]"); if (!b) return;
   const l = lists.find((x) => x.id === b.dataset.start);
-  if (l) startList({ title: l.title, words: l.words });
+  if (l) startList({ id: l.id, title: l.title, words: l.words });
 };
 
 async function loadPublic() {
@@ -248,7 +286,8 @@ async function loadPublic() {
     : `<li class="empty" style="border:none">見つかりませんでした</li>`;
 }
 $("#pubReload").onclick = loadPublic;
-$("#pubSearch").onkeydown = (e) => { if (e.key === "Enter") loadPublic(); };
+let ps; $("#pubSearch").oninput = () => { clearTimeout(ps); ps = setTimeout(loadPublic, 450); };
+$("#pubSearch").onkeydown = (e) => { if (e.key === "Enter") { clearTimeout(ps); loadPublic(); } };
 $("#pickPublic").onclick = (e) => { const b = e.target.closest("[data-code]"); if (b) openShared(b.dataset.code); };
 
 $("#codeOpen").onclick = () => {
@@ -292,13 +331,27 @@ export async function openShared(code, password) {
     lists.unshift({ id: uid(), title: r.title, words, updated: Date.now() }); saveLists(lists);
     toast("自分のリストに保存しました"); if (document.querySelector("#s-browse.active")) renderPickMine();
   }
-  if (ok === "go") startList({ title: r.title, words });
+  if (ok === "go") startList({ code: r.code, title: r.title, words });
 }
+
+// 前回のリストですぐ始める（メイン画面の「次にやること」から）
+export function startLast() {
+  const l = S.last; if (!l) return false;
+  if (l.id) { const x = loadLists().find((y) => y.id === l.id); if (x) { startList({ id: x.id, title: x.title, words: x.words }); return true; } }
+  if (l.code) { openShared(l.code); return true; }
+  return false;
+}
+export const lastListName = () => {
+  const l = S.last; if (!l) return null;
+  if (l.id) { const x = loadLists().find((y) => y.id === l.id); return x ? x.title : null; }
+  return l.code ? l.title : null;
+};
 
 // 閲覧を始める。単語が多いときは「何語やるか・どこからやるか」を選んでから view.js へ
 export async function startList(list) {
   const usable = list.words.filter((x) => x.w);
   if (!usable.length) { toast("単語がありません"); return; }
+  if (list.id || list.code) { S.last = { title: list.title, id: list.id || null, code: list.code || null }; save(); }
   const N = usable.length;
   const full = { title: list.title, words: usable };
   if (N <= 5) { launch(full, usable, null, `${N}語`, !!S.settings.reverse); return; }

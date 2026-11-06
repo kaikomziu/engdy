@@ -6,7 +6,8 @@ import { tone } from "./audio.js";
 import { startList } from "./lists.js";
 
 const Q_TIME = 12, TYPE_TIME = 30;   // 1問の制限時間（秒）。書き取りは長め
-let T = null, opt = { n: 10, dir: "en" };
+let T = null;
+const opt = { get n() { return S.settings.testN || 10; }, set n(v) { S.settings.testN = v; save(); }, get dir() { return S.settings.testDir || "en"; }, set dir(v) { S.settings.testDir = v; save(); } };
 
 onEnter("test", renderStart);
 onLeave("test", () => { if (T) { clearInterval(T.timer); T = null; } });
