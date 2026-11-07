@@ -1,4 +1,4 @@
-# Engdy（いんぐてぃー） v1.12.0
+# Engdy（いんぐてぃー） v1.12.1
 
 英単語を学んで、定着させる学習アプリ。かるわかGAMES。
 https://kaikomziu.github.io/engdy/

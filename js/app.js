@@ -17,7 +17,7 @@ import { voices, say } from "./voice.js";
 import { renderQuote, notify, testDiscord, DISCORD_EVENTS, pushRank, leaveRank } from "./social.js";
 import { initPwa, install, canInstall, isStandalone, isIOS, onPwaChange, cacheMusic, musicCached, clearMusic, musicTotal } from "./pwa.js";
 
-export const VERSION = "1.12.0";
+export const VERSION = "1.12.1";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -260,22 +260,33 @@ async function pushDaily() {
 }
 
 // ================= 設定 =================
+let setTab = "study";   // 設定で最後に開いたタブ
 onEnter("settings", () => {
   const st = S.settings;
-  $("#settingsBody").innerHTML = `<div class="card"><h3 class="sec">🎨 画面</h3>
-    <div class="set-row"><label>画面の明るさ<small>ガチャで当てたテーマの色は、どちらでも使えます</small></label>
-      <div class="seg" id="setMode">${[["light", "☀️ ライト"], ["dark", "🌙 ダーク"], ["auto", "端末に合わせる"]].map(([v, t]) => `<button data-m="${v}" class="${(st.mode || "light") === v ? "on" : ""}">${t}</button>`).join("")}</div></div>
-  </div>
-  <div class="card">
+  // 設定は、カテゴリごとのタブに分けて表示する（中身はすべて残し、見えないタブは隠すだけ）
+  const SECS = [["study", "📚", "学習"], ["sound", "🔊", "音"], ["look", "🎨", "画面"], ["link", "🔗", "つながり"], ["app", "📲", "アプリ・その他"]];
+  if (!SECS.some((x) => x[0] === setTab)) setTab = "study";
+  $("#settingsBody").innerHTML = `<nav class="set-tabs" id="setTabs">${SECS.map(([k, ic, t]) => `<button data-st="${k}" class="${setTab === k ? "on" : ""}"><span>${ic}</span>${t}</button>`).join("")}</nav>
+  <div class="set-pane" data-sp="study">
+    <div class="card"><h3 class="sec">⏱️ 閲覧の速さ</h3>
     <div class="set-row"><label>意味が出るまで<small>閲覧で、単語が出てから意味を表示するまでの秒数</small></label><span><input type="range" min="1" max="10" step="0.5" id="setShow" value="${st.showDelay}"> <b id="setShowV">${st.showDelay}秒</b></span></div>
     <div class="set-row"><label>次の単語まで<small>意味が出てから次へ進むまでの秒数</small></label><span><input type="range" min="1" max="10" step="0.5" id="setNext" value="${st.nextDelay}"> <b id="setNextV">${st.nextDelay}秒</b></span></div>
-    <div class="set-row"><label>振動<small>正解・不正解・スタンプのときに、スマホを軽くふるわせる（Android など対応機種のみ）</small></label><input type="checkbox" id="setVib" ${st.vibrate !== false ? "checked" : ""}></div>
-    <div class="set-row"><label>文字の大きさ<small>閲覧とテストの単語・意味の大きさ</small></label><div class="seg" id="setFs">${[["s", "小"], ["m", "中"], ["l", "大"]].map(([v, t]) => `<button data-fs="${v}" class="${(st.fontSize || "m") === v ? "on" : ""}">${t}</button>`).join("")}</div></div>
+    </div>
+    <div class="card"><h3 class="sec">🎯 今日の目標</h3>
+    <div class="set-row"><label>学習時間<small>0 にすると目標にしない</small></label><span><input type="number" min="0" max="300" id="setGoalMin" value="${st.goalMin}" style="width:80px"> 分</span></div>
+    <div class="set-row"><label>見る単語の数<small>0 にすると目標にしない</small></label><span><input type="number" min="0" max="3000" id="setGoalWords" value="${st.goalWords}" style="width:80px"> 語</span></div>
+    </div>
+    <div class="card"><h3 class="sec">🔔 学習のお知らせ</h3>
+    <div class="set-row"><label>学習のお知らせ<small>決めた時刻になっても今日まだ学習していないとき、通知で知らせます</small></label><input type="checkbox" id="setNotify" ${st.notify ? "checked" : ""}></div>
+    <div class="set-row"><label>時刻</label><input type="time" id="setNotifyTime" value="${st.notifyTime || "19:00"}"></div>
+    <p class="hint">※ 通知は Engdy を開いている間（ほかのタブを見ていても OK）だけ届きます。スマホでは「ホーム画面に追加」して開いておくと確実です。</p>
+    </div>
   </div>
-  <div class="card"><h3 class="sec">🗣️ 読み上げ（発音）</h3>
+  <div class="set-pane" data-sp="sound">
+    <div class="card"><h3 class="sec">🗣️ 読み上げ（発音）</h3>
     <div class="set-row"><label>自動で読み上げ<small>閲覧・テストで単語が出たときに、発音を流す</small></label><input type="checkbox" id="setSpeak" ${st.autoSpeak ? "checked" : ""}></div>
     <div class="set-row"><label>読み上げ方<small>「本物の発音」は、人が録音した発音を流します（1語の単語だけ。ない単語は合成音声）</small></label>
-      <div class="seg" id="setVMode"><button data-v="real" class="${!st.voiceMode || st.voiceMode === "real" ? "on" : ""}">本物の発音を優先</button><button data-v="cloud" class="${st.voiceMode === "cloud" ? "on" : ""}">＋ネイティブの声</button><button data-v="tts" class="${st.voiceMode === "tts" ? "on" : ""}">合成音声だけ</button></div></div>
+      <div class="seg" id="setVMode"><button data-v="real" class="${!st.voiceMode || st.voiceMode === "real" ? "on" : ""}">本物の発音</button><button data-v="cloud" class="${st.voiceMode === "cloud" ? "on" : ""}">＋ネイティブ</button><button data-v="tts" class="${st.voiceMode === "tts" ? "on" : ""}">合成音声のみ</button></div></div>
     <p class="hint">「＋ネイティブの声」は、熟語や例文を Google のとても自然な声で読みます（ログインが必要。管理者が設定しているときだけ使えます）。</p>
     <div class="set-row"><label>アクセント</label><div class="seg" id="setAccent"><button data-a="us" class="${st.accent !== "uk" ? "on" : ""}">🇺🇸 アメリカ</button><button data-a="uk" class="${st.accent === "uk" ? "on" : ""}">🇬🇧 イギリス</button></div></div>
     <div class="set-row"><label>声（合成音声）<small>熟語・例文・録音のない単語に使う声。上にあるほど自然な声です</small></label><select id="setVoice" style="max-width:220px"></select></div>
@@ -283,8 +294,8 @@ onEnter("settings", () => {
     <div class="set-row"><label>音量 <small id="setVVolV">${Math.round((st.voiceVol ?? 1) * 100)}%</small></label><input type="range" min="0" max="1" step="0.05" id="setVVol" value="${st.voiceVol ?? 1}"></div>
     <div class="set-row"><label>発音記号を表示<small>閲覧で、単語の下に /ˈbjuːtɪfəl/ のような発音記号を出す</small></label><input type="checkbox" id="setIpa" ${st.showIpa !== false ? "checked" : ""}></div>
     <div class="row wrap"><button class="btn sm" data-try="beautiful">▶ 単語（beautiful）</button><button class="btn sm" data-try="look forward to">▶ 熟語</button><button class="btn sm" data-try="I'm looking forward to seeing you again.">▶ 例文</button></div>
-  </div>
-  <div class="card"><h3 class="sec">🎵 BGM</h3>
+    </div>
+    <div class="card"><h3 class="sec">🎵 BGM</h3>
     <div class="set-row"><label>BGM を流す</label><input type="checkbox" id="setBgmOn" ${st.bgmOn !== false ? "checked" : ""}></div>
     <div class="set-row"><label>音量 <small id="setBgmV">${Math.round(st.bgm * 100)}%</small></label><input type="range" min="0" max="1" step="0.05" id="setBgm" value="${st.bgm}"></div>
     <p class="hint" style="margin-top:10px">場面ごとに流す曲を選べます。▶ で試聴（約15秒）。</p>
@@ -292,35 +303,60 @@ onEnter("settings", () => {
       <option value="none">なし</option>${TRACKS.map((t) => `<option value="${t.id}" ${sceneTrack(sc) === t.id ? "selected" : ""}>${esc(t.title)}</option>`).join("")}
       </select><button class="btn sm" data-prev="${sc}" title="試聴">▶</button></span></div>`).join("")}
     <p class="hint">曲：${[...new Set(TRACKS.map((t) => t.by))].map(esc).join("・")}</p>
-  </div>
-  <div class="card"><h3 class="sec">🔊 効果音</h3>
+    </div>
+    <div class="card"><h3 class="sec">🔊 効果音・振動</h3>
     <div class="set-row"><label>効果音を鳴らす</label><input type="checkbox" id="setSfxOn" ${st.sfxOn !== false ? "checked" : ""}></div>
     <div class="set-row"><label>音量 <small id="setSfxV">${Math.round(st.sfx * 100)}%</small></label><input type="range" min="0" max="1" step="0.05" id="setSfx" value="${st.sfx}"></div>
     ${SFX_CATS.map(([c, label, desc]) => `<div class="set-row"><label>${label}<small>${desc}</small></label><span class="row"><button class="btn sm" data-test="${c}" title="試しに鳴らす">▶</button><input type="checkbox" data-cat="${c}" ${!(st.sfxCats && st.sfxCats[c] === false) ? "checked" : ""}></span></div>`).join("")}
+    <div class="set-row"><label>振動<small>正解・不正解・スタンプのときに、スマホを軽くふるわせる（Android など対応機種のみ）</small></label><input type="checkbox" id="setVib" ${st.vibrate !== false ? "checked" : ""}></div>
+    </div>
   </div>
-  <div class="card"><h3 class="sec">🎯 今日の目標</h3>
-    <div class="set-row"><label>学習時間<small>0 にすると目標にしない</small></label><span><input type="number" min="0" max="300" id="setGoalMin" value="${st.goalMin}" style="width:80px"> 分</span></div>
-    <div class="set-row"><label>見る単語の数<small>0 にすると目標にしない</small></label><span><input type="number" min="0" max="3000" id="setGoalWords" value="${st.goalWords}" style="width:80px"> 語</span></div>
+  <div class="set-pane" data-sp="look">
+    <div class="card"><h3 class="sec">🎨 画面</h3>
+    <div class="set-row"><label>画面の明るさ<small>ガチャで当てたテーマの色は、どちらでも使えます</small></label>
+      <div class="seg" id="setMode">${[["light", "☀️ ライト"], ["dark", "🌙 ダーク"], ["auto", "端末に合わせる"]].map(([v, t]) => `<button data-m="${v}" class="${(st.mode || "light") === v ? "on" : ""}">${t}</button>`).join("")}</div></div>
+    <div class="set-row"><label>文字の大きさ<small>閲覧とテストの単語・意味の大きさ</small></label><div class="seg" id="setFs">${[["s", "小"], ["m", "中"], ["l", "大"]].map(([v, t]) => `<button data-fs="${v}" class="${(st.fontSize || "m") === v ? "on" : ""}">${t}</button>`).join("")}</div></div>
+    <div class="set-row"><label>メイン画面に「今日の名言」を出す</label><input type="checkbox" id="setQuote" ${st.showQuote !== false ? "checked" : ""}></div>
+      <div class="set-row"><label>テーマ・背景<small>ガチャで当てた色や背景に着がえる</small></label><button class="btn sm" data-go="collection">図鑑・きせかえへ</button></div>
+    </div>
   </div>
-  <div class="card"><h3 class="sec">🔔 お知らせ</h3>
-    <div class="set-row"><label>学習のお知らせ<small>決めた時刻になっても今日まだ学習していないとき、通知で知らせます</small></label><input type="checkbox" id="setNotify" ${st.notify ? "checked" : ""}></div>
-    <div class="set-row"><label>時刻</label><input type="time" id="setNotifyTime" value="${st.notifyTime || "19:00"}"></div>
-    <p class="hint">※ 通知は Engdy を開いている間（ほかのタブを見ていても OK）だけ届きます。スマホでは「ホーム画面に追加」して開いておくと確実です。</p>
-  </div>
-  <div class="card"><h3 class="sec">💬 Discord に報告</h3>
+  <div class="set-pane" data-sp="link">
+    <div class="card"><h3 class="sec">👪 保護者メール</h3>
+      <div class="set-row"><label>保護者に学習レポートを送る<small>毎日・毎週・毎月から選べます（ログインが必要）</small></label><button class="btn sm" data-go="parent">設定を開く</button></div>
+    </div>
+    <div class="card"><h3 class="sec">🏆 ランキング</h3>
+    <div class="set-row"><label>ランキングに参加する<small>連続学習日数・テストのベスト・図鑑の数・学習時間を、表示名といっしょに公開します（ログインが必要）</small></label><input type="checkbox" id="setRank" ${st.rankJoin !== false ? "checked" : ""}></div>
+      <div class="set-row"><label>いまの順位を見る</label><button class="btn sm" data-go="ranking">ランキングへ</button></div>
+    </div>
+    <div class="card"><h3 class="sec">💬 Discord に報告</h3>
     <p class="hint">Discord のチャンネルの「連携サービス → ウェブフック」で作った URL を入れると、学習の報告がそのチャンネルに届きます（ログインが必要）。</p>
     <label class="field"><span>Webhook の URL</span><input id="setDiscord" type="url" placeholder="https://discord.com/api/webhooks/…" value="${esc(st.discordUrl || "")}"></label>
     ${DISCORD_EVENTS.map(([k, t]) => `<div class="set-row"><label>${t}</label><input type="checkbox" data-dev="${k}" ${!(st.discordEvents && st.discordEvents[k] === false) ? "checked" : ""}></div>`).join("")}
     <div class="row"><button class="btn sm" id="setDiscordTest">テスト送信</button><button class="btn sm ghost" id="setDiscordClear">URL を消す</button></div>
+    </div>
   </div>
-  <div class="card"><h3 class="sec">🏆 ランキング・ほか</h3>
-    <div class="set-row"><label>ランキングに参加する<small>連続学習日数・テストのベスト・図鑑の数・学習時間を、表示名といっしょに公開します（ログインが必要）</small></label><input type="checkbox" id="setRank" ${st.rankJoin !== false ? "checked" : ""}></div>
-    <div class="set-row"><label>メイン画面に「今日の名言」を出す</label><input type="checkbox" id="setQuote" ${st.showQuote !== false ? "checked" : ""}></div>
-  </div>
-  <div class="card" id="appCard"></div>
-  <div class="card"><h3 class="sec">データ</h3>
+  <div class="set-pane" data-sp="app">
+    <div class="card" id="appCard"></div>
+    <div class="card"><h3 class="sec">👤 アカウント・データ</h3>
+      <div class="set-row"><label>かるわかGAMES アカウント<small>${me() ? esc((me().display_name || me().username) + " でログイン中") : "ゲストで使っています"}</small></label><button class="btn sm" id="setAcct">${me() ? "アカウント" : "ログイン"}</button></div>
     <p class="hint">${me() ? "ログイン中なので、記録はかるわかGAMES のクラウドに自動で保存されます。" : "ゲストの記録はこのブラウザだけに保存されます。アカウントでログインすると、ほかの端末でも続きができます。"}</p>
-    <button class="btn danger ghost" id="resetAll">この端末の記録をすべて消す</button></div>`;
+    <button class="btn danger ghost" id="resetAll">この端末の記録をすべて消す</button>
+    </div>
+    <div class="card"><h3 class="sec">ℹ️ その他</h3>
+      <div class="set-row"><label>ショートカット<small>キーボードで使えるキーの一覧（? キーでも開けます）</small></label><button class="btn sm" id="setKeys">見る</button></div>
+      <div class="set-row"><label>更新履歴</label><button class="btn sm" data-go="changelog">見る</button></div>
+      <div class="set-row"><label>クレジット<small>使っている素材・サービス</small></label><button class="btn sm" data-go="credits">見る</button></div>
+      <p class="hint">Engdy <span>v${VERSION}</span></p>
+    </div>
+  </div>`;
+  const showSec = () => {
+    $$("#setTabs [data-st]").forEach((b) => b.classList.toggle("on", b.dataset.st === setTab));
+    $$(".set-pane").forEach((pn) => (pn.hidden = pn.dataset.sp !== setTab));
+  };
+  showSec();
+  $("#setTabs").onclick = (e) => { const b = e.target.closest("[data-st]"); if (!b) return; setTab = b.dataset.st; showSec(); stopPreview(); scrollTo(0, 0); };
+  $("#setKeys").onclick = showKeys;
+  $("#setAcct").onclick = () => { if (window.KaAccount) (KaAccount.isLoggedIn() ? KaAccount.openPanel() : KaAccount.login("login")); };
   const bind = (id, key, label, after) => {
     const el = $(id);
     el.oninput = () => { st[key] = el.type === "checkbox" ? el.checked : parseFloat(el.value); if (label) $(label).textContent = st[key] + "秒"; after && after(st[key]); save(); };

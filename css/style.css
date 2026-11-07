@@ -543,3 +543,15 @@ html[data-mode="dark"] .toast{background:#e8ebe9;color:#16191a}
 html[data-mode="dark"] .update-bar{background:#e8ebe9;color:#16191a}
 html[data-mode="dark"] .update-bar .btn.ghost{color:#444}
 html[data-mode="dark"] .spell .miss{background:rgba(220,90,70,.25)}
+
+/* v1.12.1 設定の整理 */
+.set-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;position:sticky;top:64px;z-index:5;background:var(--bg);padding:4px 0 8px}
+.set-tabs button{flex:1;min-width:84px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:9px 6px;border:1px solid var(--line);border-radius:12px;background:var(--paper);font-size:12px;font-weight:600;color:var(--sub)}
+.set-tabs button span{font-size:19px}
+.set-tabs button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.set-pane{display:grid;gap:16px}
+.quick-links{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.qlink{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);font-size:12px;font-weight:600;color:var(--ink);box-shadow:var(--shadow)}
+.qlink span{font-size:22px}
+.qlink:hover{border-color:var(--accent)}
+@media (max-width:420px){.qlink{font-size:11px;padding:10px 4px}.set-tabs button{min-width:70px;font-size:11px}}
