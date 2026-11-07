@@ -1,4 +1,4 @@
-# Engdy（いんぐてぃー） v1.9.0
+# Engdy（いんぐてぃー） v1.10.0
 
 英単語を学んで、定着させる学習アプリ。かるわかGAMES。
 https://kaikomziu.github.io/engdy/
@@ -25,6 +25,7 @@ https://kaikomziu.github.io/engdy/
 
 ## 素材
 - 効果音：OtoLogic（CC BY 4.0）、効果音ラボ
+- 発音：Free Dictionary API（dictionaryapi.dev）、録音は Wikimedia Commons（CC BY 3.0 US / CC BY-SA 3.0 など）
 - BGM：ふぁいの音楽置き場（fai-musics）、MusMus（watson）、DOVA-SYNDROME（しゃろう）
 
 作者：かるわか ／ コード：Claude AI（Anthropic）

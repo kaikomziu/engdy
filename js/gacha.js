@@ -4,7 +4,7 @@ import { S, save } from "./store.js";
 import { onEnter, onBack } from "./router.js";
 import { sfx, tone, duck } from "./audio.js";
 import { fn, token, reasonText } from "./api.js";
-import { modal, miniMarkdown } from "./util.js";
+import { modal, miniMarkdown, speak } from "./util.js";
 import { RARITY, ORDER, COST1, COST10, PITY, DUP_REFUND, DEX, BGS, THEMES, ALL, byId, itemName, itemIcon, itemSub } from "./items.js";
 
 // ================= きせかえを反映 =================
@@ -154,7 +154,7 @@ function showSingle(g) {
     <div class="g-card" style="--glow:${c}">${cardHtml(g)}</div>
     <div class="g-done">${doneBtns(1)}</div>`;
   result.classList.add("on");
-  if (g.it.type === "dex") setTimeout(() => { try { const u = new SpeechSynthesisUtterance(g.it.en); u.lang = "en-US"; speechSynthesis.speak(u); } catch (e) {} }, 400);
+  if (g.it.type === "dex") setTimeout(() => speak(g.it.en), 400);
   bindDone();
 }
 
@@ -251,7 +251,7 @@ function openDex(d) {
     <p class="dex-ex">“${esc(d.ex)}”</p><div id="dexAiBox">${body()}</div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="dexSay">🔊 発音</button><button class="btn pri" data-close>閉じる</button></div>`,
     (c) => {
-      c.querySelector("#dexSay").onclick = () => { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(`${d.en}. ${d.ex}`); u.lang = "en-US"; u.rate = 0.9; speechSynthesis.speak(u); } catch (e) {} };
+      c.querySelector("#dexSay").onclick = () => { speak(d.en); setTimeout(() => speak(d.ex), 1300); };
       const bind = () => { const b = c.querySelector("#dexAi"); if (b) b.onclick = async () => {
         if (!token()) { toast("AI の解説は、ログインすると見られます"); return; }
         b.disabled = true; b.innerHTML = `<span class="spinner"></span> 調べています…`;
@@ -289,7 +289,7 @@ function renderCollection() {
   $$("[data-skin]").forEach((b) => (b.onclick = () => { S.equip[colTab] = b.dataset.skin; save(); applySkin(); tone("click"); renderCollection(); }));
   $$("[data-dex]").forEach((b) => (b.onclick = () => {
     const d = DEX.find((x) => x.id === b.dataset.dex); if (!S.owned.dex[d.id]) return;
-    try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(d.en); u.lang = "en-US"; speechSynthesis.speak(u); } catch (e) {}
+    speak(d.en);
     openDex(d);
   }));
 }

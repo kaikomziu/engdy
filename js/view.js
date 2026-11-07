@@ -7,6 +7,7 @@ import { go, onEnter, onLeave } from "./router.js";
 import { tone } from "./audio.js";
 import { awardLap, updateDia } from "./app.js";
 import { startList } from "./lists.js";
+import { ipaOf, prefetch } from "./voice.js";
 
 const IDLE_MS = 60000, MIN_WORDS_FOR_STAMP = 5;
 let V = null;     // いまの閲覧
@@ -54,6 +55,8 @@ function showWord() {
   $("#viewBar").style.width = `${(V.i / V.words.length) * 100}%`;
   $("#vBack").disabled = V.i === 0;
   if (S.settings.autoSpeak && !V.reverse) speak(x.w);
+  showIpa(x, !V.reverse);
+  const nx = V.words[V.i + 1]; if (nx) prefetch(nx.w);
   remember();
 }
 function reveal() {
@@ -63,6 +66,7 @@ function reveal() {
   $("#vMean").classList.add("show");
   $("#vHint").textContent = V.i + 1 < V.words.length ? "タップで次へ" : "タップで完了";
   if (S.settings.autoSpeak && V.reverse) speak(x.w);
+  if (V.reverse) showIpa(x, true);
   // 見た単語として記録（戻って見直したぶんは数えない）
   if (!V.counted.has(V.i)) {
     V.counted.add(V.i);
@@ -71,6 +75,13 @@ function reveal() {
     today().w++; S.stats.views++;
   }
   save();
+}
+// 発音記号（英語が見えているときだけ）
+function showIpa(x, visible) {
+  const el = $("#vIpa"); el.textContent = "";
+  if (!visible) return;
+  const i = V.i;
+  ipaOf(x.w).then((ipa) => { if (V && V.i === i && ipa) el.textContent = ipa; });
 }
 function next() {
   tone("next");

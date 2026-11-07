@@ -91,8 +91,11 @@ export function miniMarkdown(text) {
   return html;
 }
 
-// 発音（ブラウザの読み上げ）
+// 発音。voice.js が読み込まれていれば、そちら（本物の発音・自然な声）を使う
+let speaker = null;
+export const setSpeaker = (f) => (speaker = f);
 export function speak(text, rate = 0.9) {
+  if (speaker) { speaker(text, rate); return; }
   try {
     if (!("speechSynthesis" in window)) return;
     speechSynthesis.cancel();

@@ -13,9 +13,10 @@ import "./stats.js";
 import "./agent.js";
 import { CHANGELOG } from "./changelog.js";
 import "./memo.js";
+import { voices, say } from "./voice.js";
 import { initPwa, install, canInstall, isStandalone, isIOS, onPwaChange, cacheMusic, musicCached, clearMusic, musicTotal } from "./pwa.js";
 
-export const VERSION = "1.9.0";
+export const VERSION = "1.10.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -257,9 +258,19 @@ onEnter("settings", () => {
   $("#settingsBody").innerHTML = `<div class="card">
     <div class="set-row"><label>意味が出るまで<small>閲覧で、単語が出てから意味を表示するまでの秒数</small></label><span><input type="range" min="1" max="10" step="0.5" id="setShow" value="${st.showDelay}"> <b id="setShowV">${st.showDelay}秒</b></span></div>
     <div class="set-row"><label>次の単語まで<small>意味が出てから次へ進むまでの秒数</small></label><span><input type="range" min="1" max="10" step="0.5" id="setNext" value="${st.nextDelay}"> <b id="setNextV">${st.nextDelay}秒</b></span></div>
-    <div class="set-row"><label>発音を自動で読み上げ<small>単語が出たときに英語の音声を流す</small></label><input type="checkbox" id="setSpeak" ${st.autoSpeak ? "checked" : ""}></div>
     <div class="set-row"><label>振動<small>正解・不正解・スタンプのときに、スマホを軽くふるわせる（Android など対応機種のみ）</small></label><input type="checkbox" id="setVib" ${st.vibrate !== false ? "checked" : ""}></div>
     <div class="set-row"><label>文字の大きさ<small>閲覧とテストの単語・意味の大きさ</small></label><div class="seg" id="setFs">${[["s", "小"], ["m", "中"], ["l", "大"]].map(([v, t]) => `<button data-fs="${v}" class="${(st.fontSize || "m") === v ? "on" : ""}">${t}</button>`).join("")}</div></div>
+  </div>
+  <div class="card"><h3 class="sec">🗣️ 読み上げ（発音）</h3>
+    <div class="set-row"><label>自動で読み上げ<small>閲覧・テストで単語が出たときに、発音を流す</small></label><input type="checkbox" id="setSpeak" ${st.autoSpeak ? "checked" : ""}></div>
+    <div class="set-row"><label>読み上げ方<small>「本物の発音」は、人が録音した発音を流します（1語の単語だけ。ない単語は合成音声）</small></label>
+      <div class="seg" id="setVMode"><button data-v="real" class="${st.voiceMode !== "tts" ? "on" : ""}">本物の発音を優先</button><button data-v="tts" class="${st.voiceMode === "tts" ? "on" : ""}">合成音声だけ</button></div></div>
+    <div class="set-row"><label>アクセント</label><div class="seg" id="setAccent"><button data-a="us" class="${st.accent !== "uk" ? "on" : ""}">🇺🇸 アメリカ</button><button data-a="uk" class="${st.accent === "uk" ? "on" : ""}">🇬🇧 イギリス</button></div></div>
+    <div class="set-row"><label>声（合成音声）<small>熟語・例文・録音のない単語に使う声。上にあるほど自然な声です</small></label><select id="setVoice" style="max-width:220px"></select></div>
+    <div class="set-row"><label>速さ <small id="setRateV">${Math.round((st.voiceRate || 0.9) * 100)}%</small></label><input type="range" min="0.6" max="1.3" step="0.05" id="setRate" value="${st.voiceRate || 0.9}"></div>
+    <div class="set-row"><label>音量 <small id="setVVolV">${Math.round((st.voiceVol ?? 1) * 100)}%</small></label><input type="range" min="0" max="1" step="0.05" id="setVVol" value="${st.voiceVol ?? 1}"></div>
+    <div class="set-row"><label>発音記号を表示<small>閲覧で、単語の下に /ˈbjuːtɪfəl/ のような発音記号を出す</small></label><input type="checkbox" id="setIpa" ${st.showIpa !== false ? "checked" : ""}></div>
+    <div class="row wrap"><button class="btn sm" data-try="beautiful">▶ 単語（beautiful）</button><button class="btn sm" data-try="look forward to">▶ 熟語</button><button class="btn sm" data-try="I'm looking forward to seeing you again.">▶ 例文</button></div>
   </div>
   <div class="card"><h3 class="sec">🎵 BGM</h3>
     <div class="set-row"><label>BGM を流す</label><input type="checkbox" id="setBgmOn" ${st.bgmOn !== false ? "checked" : ""}></div>
@@ -296,6 +307,22 @@ onEnter("settings", () => {
   bind("#setShow", "showDelay", "#setShowV");
   bind("#setNext", "nextDelay", "#setNextV");
   bind("#setSpeak", "autoSpeak");
+  // 読み上げ
+  const fillVoices = () => {
+    const vs = voices();
+    $("#setVoice").innerHTML = `<option value="">おすすめ（自動）${vs[0] ? "：" + esc(vs[0].name) : ""}</option>` + vs.map((v) => `<option value="${esc(v.name)}" ${st.voiceName === v.name ? "selected" : ""}>${esc(v.name)}（${esc(v.lang)}）</option>`).join("");
+    if (!vs.length) $("#setVoice").innerHTML = `<option value="">この端末には英語の声がありません</option>`;
+  };
+  fillVoices();
+  try { speechSynthesis.addEventListener("voiceschanged", fillVoices, { once: true }); } catch (e) {}
+  $("#setVoice").onchange = (e) => { st.voiceName = e.target.value; save(); say("Hello! Nice to meet you."); };
+  $("#setVMode").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; st.voiceMode = b.dataset.v; save(); $$("#setVMode button").forEach((x) => x.classList.toggle("on", x === b)); };
+  $("#setAccent").onclick = (e) => { const b = e.target.closest("[data-a]"); if (!b) return; st.accent = b.dataset.a; st.voiceName = ""; save(); $$("#setAccent button").forEach((x) => x.classList.toggle("on", x === b)); fillVoices(); say("beautiful"); };
+  $("#setRate").oninput = (e) => { st.voiceRate = parseFloat(e.target.value); $("#setRateV").textContent = Math.round(st.voiceRate * 100) + "%"; save(); };
+  $("#setRate").onchange = () => say("beautiful");
+  $("#setVVol").oninput = (e) => { st.voiceVol = parseFloat(e.target.value); $("#setVVolV").textContent = Math.round(st.voiceVol * 100) + "%"; save(); };
+  $("#setIpa").onchange = (e) => { st.showIpa = e.target.checked; save(); };
+  $$("[data-try]").forEach((b) => (b.onclick = () => say(b.dataset.try)));
   // BGM
   $("#setBgmOn").onchange = (e) => { st.bgmOn = e.target.checked; save(); refreshBgm(); };
   $("#setBgm").oninput = (e) => { st.bgm = parseFloat(e.target.value); $("#setBgmV").textContent = Math.round(st.bgm * 100) + "%"; save(); refreshBgm(); };

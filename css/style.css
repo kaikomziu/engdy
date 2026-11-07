@@ -502,3 +502,6 @@ body.offline .topbar .brand::after{content:"オフライン";margin-left:8px;fon
 .dex-head .gi{font-size:54px}
 .dex-ex{font-style:italic;color:var(--sub)}
 .dex-ai{max-width:100%;margin:8px 0}
+
+/* v1.10.0 読み上げ */
+.vipa{font:500 calc(18px * var(--fscale)) "Segoe UI","Lucida Sans Unicode","Arial Unicode MS",sans-serif;color:var(--sub);margin-top:4px;min-height:1.3em;letter-spacing:.02em}
