@@ -581,3 +581,5 @@ html[data-mode="dark"] .spell .miss{background:rgba(220,90,70,.25)}
 .wrap-seg{flex-wrap:wrap;border-radius:14px}
 .bd-adm{border-top:1px solid var(--line);padding:10px 0}
 .bd-adm:first-child{border-top:none}
+
+.mail{font-family:var(--mono);letter-spacing:.02em;word-break:break-all}

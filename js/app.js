@@ -18,7 +18,7 @@ import { renderQuote, notify, testDiscord, DISCORD_EVENTS, pushRank, leaveRank }
 import { renderBoardAdmin, showRules } from "./board.js";
 import { initPwa, install, canInstall, isStandalone, isIOS, onPwaChange, cacheMusic, musicCached, clearMusic, musicTotal } from "./pwa.js";
 
-export const VERSION = "1.13.0";
+export const VERSION = "1.13.1";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -189,9 +189,25 @@ export function showKeys() {
     <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn pri" data-close>OK</button></div>`);
 }
 $("#keysLink").onclick = showKeys;
+$("#contactLink").onclick = showContact;
 document.addEventListener("keydown", (e) => {
   if (e.key === "?" && !(e.target.closest && e.target.closest("input,textarea")) && $("#modal").hidden) { e.preventDefault(); showKeys(); }
 });
+
+// ================= お問い合わせ =================
+// メールアドレスは、機械に読み取られにくいよう「★」で表示する（コピーするときだけ @ にする）
+const CONTACT_MAIL = "karubiwakame★gmail.com";
+export function showContact() {
+  modal(`<p class="kicker">CONTACT</p><h3>✉️ お問い合わせ</h3>
+    <p>ご意見・ご要望・不具合の報告は、<b>掲示板の「❓ 質問」</b>で受け付けています。</p>
+    <p>または、メール <b class="mail">${CONTACT_MAIL}</b>（★→@）でも受け付けています。</p>
+    <p class="hint">不具合のときは、使っている端末（iPhone・Android・PC など）と、どの画面で何をしたかを書いてもらえると助かります。個人情報は書かないでください。</p>
+    <div class="row wrap" style="justify-content:flex-end"><button class="btn" id="ctCopy">メールアドレスをコピー</button><button class="btn" id="ctBoard">掲示板で質問する</button><button class="btn pri" data-close>閉じる</button></div>`,
+    (c, close) => {
+      c.querySelector("#ctCopy").onclick = () => navigator.clipboard.writeText(CONTACT_MAIL.replace("★", "@")).then(() => toast("コピーしました"), () => toast("コピーできませんでした"));
+      c.querySelector("#ctBoard").onclick = () => { close(); go("board", { compose: { cat: "question", body: "" } }); };
+    });
+}
 
 // ================= 文字サイズ =================
 export function applyFontSize() { document.documentElement.dataset.fs = S.settings.fontSize || "m"; }
@@ -347,6 +363,7 @@ onEnter("settings", () => {
     <button class="btn danger ghost" id="resetAll">この端末の記録をすべて消す</button>
     </div>
     <div class="card"><h3 class="sec">ℹ️ その他</h3>
+      <div class="set-row"><label>お問い合わせ<small>ご意見・不具合の報告は、掲示板の「質問」または、メール ${CONTACT_MAIL}（★→@）でも</small></label><button class="btn sm" id="setContact">開く</button></div>
       <div class="set-row"><label>ショートカット<small>キーボードで使えるキーの一覧（? キーでも開けます）</small></label><button class="btn sm" id="setKeys">見る</button></div>
       <div class="set-row"><label>更新履歴</label><button class="btn sm" data-go="changelog">見る</button></div>
       <div class="set-row"><label>クレジット<small>使っている素材・サービス</small></label><button class="btn sm" data-go="credits">見る</button></div>
@@ -360,6 +377,7 @@ onEnter("settings", () => {
   showSec();
   $("#setTabs").onclick = (e) => { const b = e.target.closest("[data-st]"); if (!b) return; setTab = b.dataset.st; showSec(); stopPreview(); scrollTo(0, 0); };
   $("#setKeys").onclick = showKeys;
+  $("#setContact").onclick = showContact;
   $("#setBoardRules").onclick = showRules;
   $("#setAcct").onclick = () => { if (window.KaAccount) (KaAccount.isLoggedIn() ? KaAccount.openPanel() : KaAccount.login("login")); };
   const bind = (id, key, label, after) => {
