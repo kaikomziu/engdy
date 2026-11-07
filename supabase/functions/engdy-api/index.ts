@@ -70,9 +70,22 @@ async function sendMail(cfg: Config, to: string, subject: string, html: string, 
 }
 
 type Day = { day: string; seconds: number; words: number; laps: number; test_total: number; test_correct: number };
-type Target = { account: string; email: string; unsub: string; name: string; days: Day[] };
+type Freq = "daily" | "weekly" | "monthly";
+type Target = { account: string; email: string; unsub: string; name: string; freq: Freq; days: Day[] };
+const FREQ_JA: Record<Freq, string> = { daily: "毎日", weekly: "毎週", monthly: "毎月" };
+const WRAP = (inner: string) => `<div style="font-family:system-ui,'Hiragino Sans','Yu Gothic',sans-serif;max-width:560px;margin:auto;color:#22312b;line-height:1.6">${inner}</div>`;
+const FOOT = (unsub: string) => `<p style="font-size:12px;color:#888;margin-top:24px">このメールは、英語学習アプリ Engdy（かるわかGAMES）の利用者が、保護者のメールアドレスとして登録したため届いています。<br>今後受け取らない場合は <a href="${unsub}">こちらから送信を停止</a> できます。</p>`;
 
-function weeklyMail(t: Target) {
+// 期間の見出し
+function periodLabel(freq: Freq, from: string, to: string) {
+  if (freq === "daily") return { title: "今日の英語学習", kicker: "ENGDY DAILY", subject: "今日の学習レポート", none: "今日の記録はありませんでした。" };
+  if (freq === "weekly") return { title: "1週間の英語学習", kicker: "ENGDY WEEKLY", subject: "1週間の学習レポート", none: "この1週間の記録はありませんでした。" };
+  const m = Number(from.slice(5, 7));
+  return { title: `${m}月の英語学習`, kicker: "ENGDY MONTHLY", subject: `${m}月の学習レポート`, none: `${m}月の記録はありませんでした。` };
+}
+
+function reportMail(t: Target, freq: Freq, from: string, to: string) {
+  const L = periodLabel(freq, from, to);
   const sum = t.days.reduce((a, d) => ({
     seconds: a.seconds + d.seconds, words: a.words + d.words, laps: a.laps + d.laps,
     test_total: a.test_total + d.test_total, test_correct: a.test_correct + d.test_correct,
@@ -81,37 +94,63 @@ function weeklyMail(t: Target) {
   const rate = sum.test_total ? Math.round((sum.test_correct / sum.test_total) * 100) + "%" : "—";
   const active = t.days.filter((d) => d.seconds > 0 || d.test_total > 0).length;
   const unsub = `${SITE}?unsub=${t.unsub}`;
-  const rows = t.days.map((d) =>
-    `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">${esc(d.day)}</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">${Math.round(d.seconds / 60)}分</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">${d.words}語</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">${d.test_total ? Math.round(d.test_correct / d.test_total * 100) + "%" : "—"}</td></tr>`
-  ).join("") || `<tr><td colspan="4" style="padding:10px;color:#888">この1週間の記録はありませんでした。</td></tr>`;
-  const html = `<div style="font-family:system-ui,'Hiragino Sans','Yu Gothic',sans-serif;max-width:560px;margin:auto;color:#22312b">
-<p style="font-size:12px;letter-spacing:.2em;color:#5b7d6f">ENGDY WEEKLY</p>
-<h1 style="font-size:20px;margin:0 0 12px">${esc(t.name)} さんの1週間の英語学習</h1>
+  const td = "padding:6px 10px;border-bottom:1px solid #eee";
+  const rows = t.days.filter((d) => d.seconds > 0 || d.test_total > 0 || d.words > 0).map((d) =>
+    `<tr><td style="${td}">${esc(d.day)}</td><td style="${td};text-align:right">${Math.round(d.seconds / 60)}分</td><td style="${td};text-align:right">${d.words}語</td><td style="${td};text-align:right">${d.test_total ? Math.round(d.test_correct / d.test_total * 100) + "%" : "—"}</td></tr>`
+  ).join("") || `<tr><td colspan="4" style="padding:10px;color:#888">${L.none}</td></tr>`;
+  const third = freq === "daily" ? `1周した回数<br><b style="font-size:20px">${sum.laps}回</b>` : `学習した日<br><b style="font-size:20px">${active}日</b>`;
+  const html = WRAP(`<p style="font-size:12px;letter-spacing:.2em;color:#5b7d6f">${L.kicker}</p>
+<h1 style="font-size:20px;margin:0 0 4px">${esc(t.name)} さんの${L.title}</h1>
+<p style="font-size:13px;color:#666;margin:0 0 12px">${from === to ? esc(from) : `${esc(from)} 〜 ${esc(to)}`}</p>
 <table style="width:100%;border-collapse:collapse;margin:12px 0;background:#f4f7f5;border-radius:10px">
-<tr><td style="padding:12px">学習時間<br><b style="font-size:20px">${min}分</b></td><td style="padding:12px">見た単語<br><b style="font-size:20px">${sum.words}語</b></td><td style="padding:12px">学習した日<br><b style="font-size:20px">${active}日</b></td><td style="padding:12px">テスト正答率<br><b style="font-size:20px">${rate}</b></td></tr></table>
-<table style="width:100%;border-collapse:collapse;font-size:14px"><tr style="color:#5b7d6f"><th style="text-align:left;padding:6px 10px">日付</th><th style="text-align:right;padding:6px 10px">時間</th><th style="text-align:right;padding:6px 10px">単語</th><th style="text-align:right;padding:6px 10px">正答率</th></tr>${rows}</table>
-<p style="font-size:13px;color:#555;margin-top:18px">学習時間は、放置していた時間を除いた「ちゃんと取り組んだ時間」です。</p>
-<p style="font-size:12px;color:#888;margin-top:24px">このメールは、英語学習アプリ Engdy（かるわかGAMES）の利用者が、保護者のメールアドレスとして登録したため届いています。<br>今後受け取らない場合は <a href="${unsub}">こちらから送信を停止</a> できます。</p></div>`;
-  const text = `${t.name} さんの1週間の英語学習（Engdy）\n学習時間 ${min}分 / 見た単語 ${sum.words}語 / 学習した日 ${active}日 / テスト正答率 ${rate}\n\n` +
-    t.days.map((d) => `${d.day}  ${Math.round(d.seconds / 60)}分  ${d.words}語`).join("\n") +
-    `\n\n送信の停止: ${unsub}`;
-  return { subject: `【Engdy】${t.name} さんの1週間の学習レポート`, html, text };
+<tr><td style="padding:12px">学習時間<br><b style="font-size:20px">${min}分</b></td><td style="padding:12px">見た単語<br><b style="font-size:20px">${sum.words}語</b></td><td style="padding:12px">${third}</td><td style="padding:12px">テスト正答率<br><b style="font-size:20px">${rate}</b></td></tr></table>
+${freq === "daily" ? "" : `<table style="width:100%;border-collapse:collapse;font-size:14px"><tr style="color:#5b7d6f"><th style="text-align:left;padding:6px 10px">日付</th><th style="text-align:right;padding:6px 10px">時間</th><th style="text-align:right;padding:6px 10px">単語</th><th style="text-align:right;padding:6px 10px">正答率</th></tr>${rows}</table>`}
+<p style="font-size:13px;color:#555;margin-top:18px">学習時間は、放置していた時間を除いた「ちゃんと取り組んだ時間」です。</p>${FOOT(unsub)}`);
+  const text = `${t.name} さんの${L.title}（Engdy）\n${from === to ? from : `${from} 〜 ${to}`}\n学習時間 ${min}分 / 見た単語 ${sum.words}語 / テスト正答率 ${rate}\n\n` +
+    (freq === "daily" ? "" : t.days.map((d) => `${d.day}  ${Math.round(d.seconds / 60)}分  ${d.words}語`).join("\n") + "\n\n") +
+    `送信の停止: ${unsub}`;
+  return { subject: `【Engdy】${t.name} さんの${L.subject}`, html, text };
 }
 
-async function sendWeekly(cfg: Config, accountId: string | null) {
+// 認証メール（仮登録 → ボタンで本登録）
+function verifyMail(name: string, token: string, freq: Freq) {
+  const url = `${SITE}?verify=${token}`;
+  const html = WRAP(`<p style="font-size:12px;letter-spacing:.2em;color:#5b7d6f">ENGDY</p>
+<h1 style="font-size:20px;margin:0 0 12px">学習レポートの受け取りを確認してください</h1>
+<p>${esc(name)} さんが、英語学習アプリ <b>Engdy</b> で、このメールアドレスを保護者の連絡先として登録しました。</p>
+<p>受け取る場合は、下のボタンを押してください。<b>${FREQ_JA[freq]}</b>、学習時間・見た単語の数・テストの正答率をお知らせします。</p>
+<p style="text-align:center;margin:28px 0"><a href="${url}" style="display:inline-block;background:#2f6f5e;color:#fff;text-decoration:none;font-weight:700;padding:14px 32px;border-radius:999px">受け取りを認証する</a></p>
+<p style="font-size:13px;color:#666">ボタンを押せない場合は、次のURLを開いてください。<br><a href="${url}" style="word-break:break-all">${url}</a></p>
+<p style="font-size:13px;color:#666">このリンクは48時間有効です。心当たりがない場合は、このメールを無視してください（認証しなければ、レポートは届きません）。</p>`);
+  const text = `${name} さんが、英語学習アプリ Engdy で、このメールアドレスを保護者の連絡先として登録しました。\n受け取る場合は、次のURLを開いて認証してください（48時間有効）。\n${url}\n\n心当たりがない場合は、このメールを無視してください。`;
+  return { subject: "【Engdy】学習レポートの受け取りを確認してください", html, text };
+}
+
+// 今日送る頻度（日本時間）：毎日はいつも、毎週は日曜、毎月は1日
+function dueFreqs(): Freq[] {
+  const jst = new Date(Date.now() + 9 * 3600e3);
+  const out: Freq[] = ["daily"];
+  if (jst.getUTCDay() === 0) out.push("weekly");
+  if (jst.getUTCDate() === 1) out.push("monthly");
+  return out;
+}
+
+async function sendReports(cfg: Config, freqs: Freq[], accountId: string | null = null) {
   if (cfg.settings.mail_enabled === "off" && !accountId) return { sent: 0, failed: 0, skipped: "disabled" };
-  const { data } = await sb.rpc("engdy_internal_weekly", { p_account: accountId });
-  const targets = (data || []) as Target[];
   let sent = 0, failed = 0;
-  for (const t of targets) {
-    try {
-      const m = weeklyMail(t);
-      await sendMail(cfg, t.email, m.subject, m.html, m.text);
-      await sb.rpc("engdy_internal_mark", { p_account: t.account, p_ok: true, p_info: accountId ? "manual" : "weekly" });
-      sent++;
-    } catch (e) {
-      await sb.rpc("engdy_internal_mark", { p_account: t.account, p_ok: false, p_info: String((e as Error).message) });
-      failed++;
+  for (const freq of freqs) {
+    const { data } = await sb.rpc("engdy_internal_reports", { p_freq: freq, p_account: accountId });
+    const r = (data || {}) as { from: string; to: string; targets: Target[] };
+    for (const t of r.targets || []) {
+      try {
+        const m = reportMail(t, freq, r.from, r.to);
+        await sendMail(cfg, t.email, m.subject, m.html, m.text);
+        await sb.rpc("engdy_internal_mark", { p_account: t.account, p_ok: true, p_info: `${accountId ? "manual" : "auto"}:${freq}` });
+        sent++;
+      } catch (e) {
+        await sb.rpc("engdy_internal_mark", { p_account: t.account, p_ok: false, p_info: `${freq}: ${String((e as Error).message)}` });
+        failed++;
+      }
     }
   }
   return { sent, failed };
@@ -144,13 +183,29 @@ Deno.serve(async (req) => {
     const cfg = await config();
 
     // 定期実行（pg_cron から）
-    if (action === "weekly") {
+    if (action === "reports" || action === "weekly") {
       if (!cfg.cron_secret || req.headers.get("x-engdy-cron") !== cfg.cron_secret) return json({ ok: false, reason: "forbidden" }, 403);
-      return json({ ok: true, ...(await sendWeekly(cfg, null)) });
+      return json({ ok: true, ...(await sendReports(cfg, dueFreqs())) });
     }
 
     const acc = await account(body.ka_token);
     if (!acc) return json({ ok: false, reason: "auth" }, 401);
+
+    // 保護者のメールアドレスへ認証メールを送る（仮登録 → 本登録）
+    if (action === "parent_verify_send") {
+      const { data } = await sb.rpc("engdy_internal_verify_prepare", { p_account: acc.id });
+      const v = data as { ok: boolean; reason?: string; email?: string; token?: string; name?: string; freq?: Freq };
+      if (!v || !v.ok) return json({ ok: false, reason: v ? v.reason : "error" });
+      const m = verifyMail(v.name || acc.display_name, v.token!, v.freq || "weekly");
+      try {
+        await sendMail(cfg, v.email!, m.subject, m.html, m.text);
+        await sb.rpc("engdy_internal_mark", { p_account: acc.id, p_ok: true, p_info: "verify" });
+      } catch (e) {
+        await sb.rpc("engdy_internal_mark", { p_account: acc.id, p_ok: false, p_info: "verify: " + String((e as Error).message) });
+        throw e;
+      }
+      return json({ ok: true });
+    }
 
     if (action === "meanings") {
       const words = (Array.isArray(body.words) ? body.words : []).map((w) => clip(w, 60).trim()).filter(Boolean).slice(0, 150);
@@ -192,12 +247,13 @@ Deno.serve(async (req) => {
         const d = new Date(today.getTime() - (6 - i) * 86400e3);
         return { day: d.toISOString().slice(0, 10), seconds: 300 + i * 120, words: 20 + i * 8, laps: 1 + (i % 2), test_total: 10, test_correct: 6 + (i % 4) };
       });
-      const m = weeklyMail({ account: acc.id, email: to, unsub: "test-preview-only-test-preview", name: acc.display_name + "（テスト）", days });
+      const freq: Freq = ["daily", "weekly", "monthly"].includes(String(body.freq)) ? body.freq as Freq : "weekly";
+      const m = reportMail({ account: acc.id, email: to, unsub: "test-preview-only-test-preview", name: acc.display_name + "（テスト）", freq, days: freq === "daily" ? days.slice(-1) : days }, freq, freq === "daily" ? days[6].day : days[0].day, days[6].day);
       await sendMail(cfg, to, "[テスト] " + m.subject, m.html, m.text);
       await sb.rpc("engdy_internal_mark", { p_account: null, p_ok: true, p_info: "test" });
       return json({ ok: true });
     }
-    if (action === "admin_run_weekly") return json({ ok: true, ...(await sendWeekly(cfg, null)) });
+    if (action === "admin_run_weekly" || action === "admin_run_reports") return json({ ok: true, ...(await sendReports(cfg, dueFreqs())) });
     if (action === "admin_test_ai") {
       const out = await gemini(cfg, "日本語で一言だけ返答してください。", [{ role: "user", text: "動作確認です。「OK」と返してください。" }]);
       return json({ ok: true, text: clip(out, 200) });

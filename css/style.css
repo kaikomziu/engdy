@@ -453,3 +453,9 @@ button:focus:not(:focus-visible){outline:none}
 .steps{margin:6px 0 10px;padding-left:22px;display:grid;gap:10px}
 .steps li b{display:block}
 .steps li span{font-size:13px;color:var(--sub)}
+/* v1.6.0 保護者メール */
+.freqs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.freqs .radio{margin:0}
+@media (max-width:560px){.freqs{grid-template-columns:1fr}}
+.pending-box{background:color-mix(in srgb,var(--gold) 12%,var(--paper));border:1px solid color-mix(in srgb,var(--gold) 40%,var(--line));border-radius:12px;padding:12px 14px;margin:10px 0}
+.pending-box p{margin:0 0 8px}

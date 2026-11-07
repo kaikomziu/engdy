@@ -14,7 +14,7 @@ import "./agent.js";
 import { CHANGELOG } from "./changelog.js";
 import "./memo.js";
 
-export const VERSION = "1.5.0";
+export const VERSION = "1.6.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -302,12 +302,22 @@ onEnter("changelog", () => {
 });
 
 // ================= 保護者メール =================
+// 登録すると「仮登録」になり、そのアドレスに届く認証メールのボタンを押すと「本登録」になって、レポートが届き始める
+const FREQS = [["daily", "毎日", "毎日 19:00 に、その日の学習"], ["weekly", "毎週", "毎週日曜 19:00 に、1週間の学習"], ["monthly", "毎月", "毎月1日 19:00 に、前の月の学習"]];
+const freqJa = (f) => (FREQS.find((x) => x[0] === f) || FREQS[1])[1];
+const freqPicker = (cur, name = "pmFreq") => `<div class="freqs">${FREQS.map(([v, t, d]) => `<label class="radio"><input type="radio" name="${name}" value="${v}" ${cur === v ? "checked" : ""}><span><b>${t}</b><small>${d}</small></span></label>`).join("")}</div>`;
+async function sendVerify(quiet) {
+  const x = await fn("parent_verify_send");
+  if (x.ok) { if (!quiet) toast("認証メールを送りました。届いたメールのボタンを押してください", 4000); return true; }
+  toast(reasonText(x.reason), 4000); return false;
+}
+
 onEnter("parent", renderParent);
 async function renderParent() {
   const body = $("#parentBody");
+  const about = `<p class="hint">学習時間・見た単語の数・テストの正答率を、保護者のメールアドレスへ自動で送ります。メールアドレスはサーバーで暗号化して保存され、この画面にも一部しか表示されません。メールの中のリンクからも送信を止められます。</p>`;
   if (!token()) {
-    body.innerHTML = `<div class="card"><p>保護者メールは、かるわかGAMES アカウントでログインすると使えます。</p>
-      <p class="hint">毎週日曜の夜に、1週間の学習時間・見た単語の数・テストの正答率を、登録したメールアドレスへ自動で送ります。</p>
+    body.innerHTML = `<div class="card"><p>保護者メールは、かるわかGAMES アカウントでログインすると使えます。</p>${about}
       <button class="btn pri" id="pmLogin">ログインする</button></div>`;
     $("#pmLogin").onclick = () => KaAccount.login("login");
     return;
@@ -316,35 +326,61 @@ async function renderParent() {
   let r;
   try { r = await rpc("engdy_parent_get", { p_token: token() }); } catch (e) { r = null; }
   if (!r || !r.ok) { body.innerHTML = `<div class="card">${esc(reasonText(r && r.reason))}</div>`; return; }
-  const info = `<p class="hint">毎週日曜 19:00（日本時間）に、直近1週間の学習レポートを送ります。メールアドレスはサーバーで暗号化して保存され、この画面にも一部しか表示されません。メールの中のリンクからも送信を止められます。</p>`;
-  if (!r.set) {
-    body.innerHTML = `<div class="card"><h3 class="sec">保護者のメールアドレスを登録</h3>${info}
+
+  // ---- まだ登録していない / アドレスを変える ----
+  const form = (old) => {
+    body.innerHTML = `<div class="card"><h3 class="sec">${old ? "メールアドレスを変更" : "保護者のメールアドレスを登録"}</h3>${about}
       <label class="field"><span>メールアドレス</span><input id="pmEmail" type="email" maxlength="254" placeholder="parent@example.com" autocomplete="off"></label>
-      <label class="radio"><input type="checkbox" id="pmAgree"><span>保護者の方の了承を得ています<small>週に1回、学習レポートのメールが届くことを伝えてから登録してください。</small></span></label>
-      <button class="btn pri" id="pmSave">登録する</button></div>`;
+      <div class="field"><span>送る頻度</span>${freqPicker(old ? r.freq : "weekly")}</div>
+      <label class="radio"><input type="checkbox" id="pmAgree"><span>保護者の方の了承を得ています<small>登録すると、そのアドレスに確認のメールが届きます。メールのボタンを押すまでは、レポートは届きません。</small></span></label>
+      <div class="row wrap">${old ? `<button class="btn ghost" id="pmBack">やめる</button>` : ""}<button class="btn pri" id="pmSave">登録して確認メールを送る</button></div></div>`;
+    if (old) $("#pmBack").onclick = renderParent;
     $("#pmSave").onclick = async () => {
       if (!$("#pmAgree").checked) { toast("保護者の方の了承を確認してください"); return; }
-      const x = await rpc("engdy_parent_set", { p_token: token(), p_email: $("#pmEmail").value }).catch(() => null);
-      if (x && x.ok) { toast("登録しました"); renderParent(); } else toast(reasonText(x && x.reason));
+      const freq = $('input[name="pmFreq"]:checked').value;
+      const btn = $("#pmSave"); btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> 送信中…`;
+      const x = await rpc("engdy_parent_set", { p_token: token(), p_email: $("#pmEmail").value, p_freq: freq }).catch(() => null);
+      if (!x || !x.ok) { toast(reasonText(x && x.reason)); btn.disabled = false; btn.textContent = "登録して確認メールを送る"; return; }
+      await sendVerify();
+      renderParent();
     };
-    return;
-  }
+  };
+  if (!r.set) { form(false); return; }
+
+  // ---- 登録済み ----
+  const pending = !r.verified;
+  const stateHtml = pending
+    ? `<b style="color:var(--gold)">仮登録（認証待ち）</b>`
+    : `<b style="color:${r.active ? "var(--accent)" : "var(--warn)"}">${r.active ? `${freqJa(r.freq)}送信中` : "停止中"}</b>`;
   body.innerHTML = `<div class="card"><h3 class="sec">連携中のメールアドレス</h3>
-    <p style="font-size:18px;font-family:var(--mono)">${esc(r.mask)}</p>
-    <p>状態：<b style="color:${r.active ? "var(--accent)" : "var(--warn)"}">${r.active ? "毎週送信中" : "停止中"}</b>${r.last_sent ? `　<span class="note">前回の送信：${new Date(r.last_sent).toLocaleString("ja-JP")}</span>` : ""}</p>
-    ${info}
+    <p style="font-size:18px;font-family:var(--mono);margin:4px 0">${esc(r.mask)}</p>
+    <p>状態：${stateHtml}${r.last_sent && !pending ? `　<span class="note">前回の送信：${new Date(r.last_sent).toLocaleString("ja-JP")}</span>` : ""}</p>
+    ${pending ? `<div class="pending-box">
+        <p><b>📩 確認メールを送りました。</b>保護者の方に、届いたメールの「受け取りを認証する」ボタンを押してもらってください。押すと本登録になり、レポートが届き始めます。</p>
+        <p class="note">${r.verify_expired ? "確認メールの期限（48時間）が切れました。もう一度送ってください。" : r.verify_sent_at ? `送った時刻：${new Date(r.verify_sent_at).toLocaleString("ja-JP")}（48時間有効）` : ""}　届かないときは、迷惑メールのフォルダも確かめてください。</p>
+        <div class="row wrap"><button class="btn pri" id="pmResend">確認メールをもう一度送る</button><button class="btn" id="pmReload">認証できたか確かめる</button></div>
+      </div>` : ""}
+    <div class="field" style="margin-top:12px"><span>送る頻度</span>${freqPicker(r.freq)}</div>
+    ${about}
     <div class="row wrap">
-      <button class="btn ${r.active ? "" : "pri"}" id="pmToggle">${r.active ? "送信を停止する" : "送信を再開する"}</button>
+      ${pending ? "" : `<button class="btn ${r.active ? "" : "pri"}" id="pmToggle">${r.active ? "送信を停止する" : "送信を再開する"}</button>`}
       <button class="btn" id="pmChange">アドレスを変更</button>
       <button class="btn danger ghost" id="pmDelete">連携を解除（削除）</button>
     </div></div>`;
-  $("#pmToggle").onclick = async () => {
-    const x = await rpc("engdy_parent_active", { p_token: token(), p_active: !r.active }).catch(() => null);
-    toast(x && x.ok ? (r.active ? "送信を停止しました" : "送信を再開しました") : reasonText(x && x.reason)); renderParent();
-  };
-  $("#pmChange").onclick = async () => {
-    await rpc("engdy_parent_delete", { p_token: token() }).catch(() => null); renderParent();
-  };
+  $$('input[name="pmFreq"]').forEach((el) => (el.onchange = async () => {
+    const x = await rpc("engdy_parent_freq", { p_token: token(), p_freq: el.value }).catch(() => null);
+    toast(x && x.ok ? `${freqJa(el.value)}送るようにしました` : reasonText(x && x.reason)); renderParent();
+  }));
+  if (pending) {
+    $("#pmResend").onclick = async () => { const b = $("#pmResend"); b.disabled = true; await sendVerify(); renderParent(); };
+    $("#pmReload").onclick = async () => { await renderParent(); toast(document.querySelector(".pending-box") ? "まだ認証されていません" : "認証されました！"); };
+  } else {
+    $("#pmToggle").onclick = async () => {
+      const x = await rpc("engdy_parent_active", { p_token: token(), p_active: !r.active }).catch(() => null);
+      toast(x && x.ok ? (r.active ? "送信を停止しました" : "送信を再開しました") : reasonText(x && x.reason)); renderParent();
+    };
+  }
+  $("#pmChange").onclick = () => form(true);
   $("#pmDelete").onclick = async () => {
     if (!(await confirmBox("連携を解除しますか？", "登録したメールアドレスをサーバーから削除し、送信もしなくなります。", "解除する", true))) return;
     await rpc("engdy_parent_delete", { p_token: token() }).catch(() => null); toast("解除しました"); renderParent();
@@ -371,13 +407,13 @@ async function renderAdmin() {
     ${inp("ai_daily_limit", "1人1日の AI 利用回数", "40")}
     ${inp("agent_enabled", "専属エージェント（on / off）", "on")}
     <div class="row"><button class="btn" id="admAi">AI の動作確認</button><span class="note" id="admAiOut"></span></div></div>
-  <div class="card adm-grid"><h3 class="sec">AgentMail（保護者への週次メール）</h3>
+  <div class="card adm-grid"><h3 class="sec">AgentMail（保護者へのメール）</h3>
     ${inp("agentmail_key", "API キー", "am_…（空で保存すると削除）", true)}
     ${inp("agentmail_inbox", "送信元 inbox_id", "AgentMail の inbox_id")}
-    ${inp("mail_enabled", "週次メール（on / off）", "on")}
-    <label>テスト送信先<span class="row"><input class="grow" id="admTo" type="email" placeholder="自分のメールアドレス"><button class="btn sm" id="admTest">テスト送信</button></span></label>
-    <div class="row"><button class="btn" id="admRun">いますぐ全員に週次メールを送る</button></div>
-    <p class="hint">自動送信：毎週日曜 19:00（日本時間）</p>
+    ${inp("mail_enabled", "自動送信（on / off）", "on")}
+    <label>テスト送信先<span class="row"><input class="grow" id="admTo" type="email" placeholder="自分のメールアドレス"><select id="admFreq"><option value="daily">毎日</option><option value="weekly" selected>毎週</option><option value="monthly">毎月</option></select><button class="btn sm" id="admTest">テスト送信</button></span></label>
+    <div class="row"><button class="btn" id="admRun">今日の分をいますぐ送る</button></div>
+    <p class="hint">自動送信：毎日 19:00（日本時間）。毎日の人は毎日、毎週の人は日曜、毎月の人は1日（前の月の分）。認証が済んだ人だけに送ります。</p>
     <table class="wtable"><tr><th>日時</th><th>結果</th><th>内容</th></tr>${(r.mail_log || []).map((l) => `<tr><td>${new Date(l.sent_at).toLocaleString("ja-JP")}</td><td>${l.ok ? "✓" : "✕"}</td><td>${esc(l.info || "")}</td></tr>`).join("") || `<tr><td colspan="3" class="note">まだ送信していません</td></tr>`}</table>
   </div>`;
   $$("[data-save]", body).forEach((b) => b.onclick = async () => {
@@ -386,10 +422,10 @@ async function renderAdmin() {
     toast(x && x.ok ? "保存しました" : reasonText(x && x.reason)); if (x && x.ok) renderAdmin();
   });
   $("#admAi").onclick = async () => { $("#admAiOut").textContent = "確認中…"; const x = await fn("admin_test_ai"); $("#admAiOut").textContent = x.ok ? "OK：" + x.text : reasonText(x.reason); };
-  $("#admTest").onclick = async () => { const x = await fn("admin_test_mail", { to: $("#admTo").value }); toast(x.ok ? "テストメールを送りました" : reasonText(x.reason)); if (x.ok) renderAdmin(); };
+  $("#admTest").onclick = async () => { const x = await fn("admin_test_mail", { to: $("#admTo").value, freq: $("#admFreq").value }); toast(x.ok ? "テストメールを送りました" : reasonText(x.reason)); if (x.ok) renderAdmin(); };
   $("#admRun").onclick = async () => {
-    if (!(await confirmBox("週次メールを送りますか？", "送信中になっている全員に、いますぐレポートを送ります。", "送る"))) return;
-    const x = await fn("admin_run_weekly"); toast(x.ok ? `送信 ${x.sent}件 / 失敗 ${x.failed}件` : reasonText(x.reason)); renderAdmin();
+    if (!(await confirmBox("今日の分を送りますか？", "今日が送る日になっている人（毎日の人、日曜なら毎週の人、1日なら毎月の人）に、いますぐレポートを送ります。", "送る"))) return;
+    const x = await fn("admin_run_reports"); toast(x.ok ? `送信 ${x.sent}件 / 失敗 ${x.failed}件` : reasonText(x.reason)); renderAdmin();
   };
 }
 
@@ -405,8 +441,16 @@ async function boot() {
     const r = await rpc("engdy_unsubscribe", { p_unsub: q.get("unsub") }).catch(() => null);
     history.replaceState(null, "", location.pathname);
     setTimeout(() => modal(`<p class="kicker">PARENT MAIL</p><h3>${r && r.ok ? "送信を停止しました" : "停止できませんでした"}</h3>
-      <p>${r && r.ok ? "Engdy からの週次レポートは、今後届きません。再開は、学習する人のアプリの「保護者メール」からできます。" : "リンクが古いか、すでに解除されています。"}</p>
+      <p>${r && r.ok ? "Engdy からの学習レポートは、今後届きません。再開は、学習する人のアプリの「保護者メール」からできます。" : "リンクが古いか、すでに解除されています。"}</p>
       <div class="row" style="justify-content:flex-end"><button class="btn pri" data-close>OK</button></div>`), 300);
+  }
+  if (q.get("verify")) {
+    const r = await rpc("engdy_parent_verify", { p_verify: q.get("verify") }).catch(() => null);
+    history.replaceState(null, "", location.pathname);
+    const msg = r && r.ok
+      ? `<h3>認証できました</h3><p>${esc(r.name || "")} さんの学習レポートが、<b>${freqJa(r.freq)}</b> このメールアドレスに届くようになりました。</p><p class="hint">いつでも、メールの中のリンクから送信を止められます。</p>`
+      : `<h3>認証できませんでした</h3><p>${r && r.reason === "expired" ? "リンクの期限（48時間）が切れています。学習する人のアプリの「保護者メール」から、確認メールをもう一度送ってください。" : "リンクが正しくないか、すでに認証が済んでいます。"}</p>`;
+    setTimeout(() => modal(`<p class="kicker">PARENT MAIL</p>${msg}<div class="row" style="justify-content:flex-end"><button class="btn pri" data-close>OK</button></div>`), 300);
   }
   if (q.get("list")) { pendingShared = q.get("list"); history.replaceState(null, "", location.pathname); }
 
