@@ -4,6 +4,9 @@
 import { $, $$, esc, toast, modal, confirmBox } from "./util.js";
 import { onEnter, onLeave } from "./router.js";
 import { tone } from "./audio.js";
+import { fn, token, reasonText } from "./api.js";
+import { createListFrom } from "./lists.js";
+import { go } from "./router.js";
 
 const KEY = "engdy_memo";
 const W = 1000, H = 1400;                 // ページの大きさ（論理座標。画面に合わせて縮める）
@@ -350,6 +353,7 @@ async function openMenu() {
     <h3 class="sec" style="margin-top:14px">このページの背景</h3>
     <div class="seg" id="mBg">${BGS.map(([v, t]) => `<button data-bg="${v}" class="${p.bg === v ? "on" : ""}">${t}</button>`).join("")}</div>
     <div class="row wrap" style="margin-top:14px">
+      <button class="btn pri" data-act="ocr">📷 書いた英単語をリストにする（AI）</button>
       <button class="btn" data-act="add">＋ ページを増やす</button>
       <button class="btn" data-act="dup">このページを複製</button>
       <button class="btn" data-act="png">画像で保存</button>
@@ -378,12 +382,37 @@ async function openMenu() {
   if (act === "add") addPage();
   if (act === "dup") { const cp = JSON.parse(JSON.stringify(p)); cp.id = newPage(0).id; cp.title = (p.title + " のコピー").slice(0, 40); M.pages.splice(M.cur + 1, 0, cp); goPage(M.cur + 1); toast("複製しました"); }
   if (act === "png") exportPng();
+  if (act === "ocr") ocrPage();
   if (act === "clear") { if (await confirmBox("このページを白紙にしますか？", "書いたものがすべて消えます（元に戻すボタンで戻せます）。", "白紙にする", true)) { pushUndo(); p.items = []; persist(); renderPage(); } }
   if (act === "del") {
     if (!(await confirmBox("このページを削除しますか？", `「${p.title}」を削除します。元に戻せません。`, "削除", true))) return;
     M.pages.splice(M.cur, 1); undo.delete(p.id); redo.delete(p.id); goPage(Math.min(M.cur, M.pages.length - 1)); toast("削除しました");
   }
 }
+// 書いた英単語を AI に読み取ってもらい、単語リストにする
+async function ocrPage() {
+  if (!token()) { toast("AI の機能は、ログインすると使えます"); KaAccount.login("login"); return; }
+  const p = page();
+  if (!p.items.length) { toast("このページには、まだ何も書いていません"); return; }
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const ctx = c.getContext("2d"); drawBg(ctx, "plain"); for (const it of p.items) drawItem(ctx, it);
+  toast("読み取っています…", 8000);
+  const r = await fn("ocr_memo", { image: c.toDataURL("image/jpeg", 0.85) });
+  if (!r.ok) { toast(reasonText(r.reason === "image" ? "payload" : r.reason)); return; }
+  if (!r.items.length) { toast("英単語が見つかりませんでした", 3000); return; }
+  const picked = await modal(`<p class="kicker">AI</p><h3>📷 読み取った英単語（${r.items.length}語）</h3>
+    <p class="hint">リストに入れる単語にチェックを入れてください。意味はあとで直せます。</p>
+    <div class="rel-list">${r.items.map((i, k) => `<label class="rel-item"><input type="checkbox" data-k="${k}" checked><span><b>${esc(i.word)}</b><small>${esc(i.meaning)}</small></span></label>`).join("")}</div>
+    <label class="field" style="margin-top:10px"><span>リストの名前</span><input id="ocrTitle" maxlength="60" value="${esc("メモ：" + p.title)}"></label>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" data-close>やめる</button><button class="btn pri" id="ocrOk">リストを作る</button></div>`,
+    (cc, close) => cc.querySelector("#ocrOk").onclick = () => close({ title: cc.querySelector("#ocrTitle").value.trim() || "メモから", items: [...cc.querySelectorAll("[data-k]:checked")].map((x) => r.items[+x.dataset.k]) }));
+  if (!picked || !picked.items.length) return;
+  const l = createListFrom(picked.title, picked.items);
+  tone("ok");
+  const goNow = await confirmBox("単語リストを作りました", `「${l.title}」（${l.words.length}語）を作りました。リスト制作の画面で開きますか？`, "開く");
+  if (goNow) go("create");
+}
+
 function exportPng() {
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const ctx = c.getContext("2d"); drawBg(ctx, page().bg); for (const it of page().items) drawItem(ctx, it);

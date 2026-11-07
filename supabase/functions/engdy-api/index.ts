@@ -31,19 +31,26 @@ const esc = (s: unknown) =>
 const clip = (s: unknown, n: number) => String(s ?? "").slice(0, n);
 
 // ---------- Gemini ----------
-async function gemini(cfg: Config, system: string, contents: { role: string; text: string }[], asJson = false) {
+type GPart = { text: string } | { inlineData: { mimeType: string; data: string } };
+async function gemini(cfg: Config, system: string, contents: { role: string; text: string; image?: { mime: string; data: string } }[], asJson = false) {
   const key = cfg.secrets.gemini_key;
   if (!key) throw new Error("no_gemini_key");
   const model = cfg.settings.gemini_model || "gemini-3.6-flash";
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+  const call = () => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": key },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
-      contents: contents.map((c) => ({ role: c.role === "model" ? "model" : "user", parts: [{ text: c.text }] })),
+      contents: contents.map((c) => ({ role: c.role === "model" ? "model" : "user", parts: [...(c.image ? [{ inlineData: { mimeType: c.image.mime, data: c.image.data } }] : []), { text: c.text }] as GPart[] })),
       generationConfig: { temperature: asJson ? 0.2 : 0.7, maxOutputTokens: 4096, ...(asJson ? { responseMimeType: "application/json" } : {}) },
     }),
   });
+  let res = await call();
+  for (const wait of [1500, 4000]) {
+    if (res.status !== 429 && res.status !== 503 && res.status !== 500) break;
+    await new Promise((r) => setTimeout(r, wait));
+    res = await call();
+  }
   if (!res.ok) throw new Error("gemini_" + res.status);
   const d = await res.json();
   return (d?.candidates?.[0]?.content?.parts || []).map((p: { text?: string }) => p.text || "").join("");
@@ -102,7 +109,7 @@ function periodLabel(freq: Freq, from: string, to: string) {
   return { title: `${m}月の英語学習`, kicker: "ENGDY MONTHLY", subject: `${m}月の学習レポート`, none: `${m}月の記録はありませんでした。` };
 }
 
-function reportMail(t: Target, freq: Freq, from: string, to: string) {
+function reportMail(t: Target, freq: Freq, from: string, to: string, comment = "") {
   const L = periodLabel(freq, from, to);
   const sum = t.days.reduce((a, d) => ({
     seconds: a.seconds + d.seconds, words: a.words + d.words, laps: a.laps + d.laps,
@@ -123,6 +130,7 @@ function reportMail(t: Target, freq: Freq, from: string, to: string) {
 <table style="width:100%;border-collapse:collapse;margin:12px 0;background:#f4f7f5;border-radius:10px">
 <tr><td style="padding:12px">学習時間<br><b style="font-size:20px">${min}分</b></td><td style="padding:12px">見た単語<br><b style="font-size:20px">${sum.words}語</b></td><td style="padding:12px">${third}</td><td style="padding:12px">テスト正答率<br><b style="font-size:20px">${rate}</b></td></tr></table>
 ${freq === "daily" ? "" : `<table style="width:100%;border-collapse:collapse;font-size:14px"><tr style="color:#5b7d6f"><th style="text-align:left;padding:6px 10px">日付</th><th style="text-align:right;padding:6px 10px">時間</th><th style="text-align:right;padding:6px 10px">単語</th><th style="text-align:right;padding:6px 10px">正答率</th></tr>${rows}</table>`}
+${comment ? `<div style="margin-top:16px;padding:12px 14px;background:#fff8e6;border-radius:10px;font-size:14px"><b style="font-size:12px;color:#8a6420">AI コーチのひとこと</b><br>${esc(comment)}</div>` : ""}
 <p style="font-size:13px;color:#555;margin-top:18px">学習時間は、放置していた時間を除いた「ちゃんと取り組んだ時間」です。</p>${FOOT(unsub)}`);
   const text = `${t.name} さんの${L.title}（Engdy）\n${from === to ? from : `${from} 〜 ${to}`}\n学習時間 ${min}分 / 見た単語 ${sum.words}語 / テスト正答率 ${rate}\n\n` +
     (freq === "daily" ? "" : t.days.map((d) => `${d.day}  ${Math.round(d.seconds / 60)}分  ${d.words}語`).join("\n") + "\n\n") +
@@ -161,7 +169,7 @@ async function sendReports(cfg: Config, freqs: Freq[], accountId: string | null 
     const r = (data || {}) as { from: string; to: string; targets: Target[] };
     for (const t of r.targets || []) {
       try {
-        const m = reportMail(t, freq, r.from, r.to);
+        const m = reportMail(t, freq, r.from, r.to, await aiComment(cfg, t, freq));
         await sendMail(cfg, t.email, m.subject, m.html, m.text);
         await sb.rpc("engdy_internal_mark", { p_account: t.account, p_ok: true, p_info: `${accountId ? "manual" : "auto"}:${freq}` });
         sent++;
@@ -172,6 +180,24 @@ async function sendReports(cfg: Config, freqs: Freq[], accountId: string | null 
     }
   }
   return { sent, failed };
+}
+
+// AI の JSON の返事を読む（```json で囲まれていても大丈夫に）
+function parseJson(out: string) {
+  const t = out.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+  return JSON.parse(t);
+}
+const wordsOf = (v: unknown, n: number) => (Array.isArray(v) ? v : []).map((w) => clip(w, 60).trim()).filter(Boolean).slice(0, n);
+
+// 保護者メール（毎週・毎月）に入れる、AI のひとこと
+async function aiComment(cfg: Config, t: Target, freq: Freq) {
+  if (!cfg.secrets.gemini_key || freq === "daily") return "";
+  const sum = t.days.reduce((a, d) => ({ s: a.s + d.seconds, w: a.w + d.words, tt: a.tt + d.test_total, tc: a.tc + d.test_correct, n: a.n + (d.seconds > 0 || d.test_total > 0 ? 1 : 0) }), { s: 0, w: 0, tt: 0, tc: 0, n: 0 });
+  try {
+    const out = await gemini(cfg, "あなたは英語学習アプリ Engdy のコーチです。保護者向けに、子どもの学習記録から、良かった点と次へのひとことを、やさしい日本語で3文以内で書いてください。数字を使って具体的に。絵文字や記号の装飾は使わない。",
+      [{ role: "user", text: `期間: ${freq === "weekly" ? "1週間" : "1か月"}\n学習した日: ${sum.n}日\n学習時間: ${Math.round(sum.s / 60)}分\n見た単語: ${sum.w}語\nテスト: ${sum.tt}問中${sum.tc}問正解\n日ごとの記録: ${JSON.stringify(t.days.map((d) => [d.day, Math.round(d.seconds / 60), d.words]))}` }]);
+    return clip(out.trim(), 400);
+  } catch (_e) { return ""; }
 }
 
 // ---------- AI のプロンプト ----------
@@ -197,6 +223,7 @@ Deno.serve(async (req) => {
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json({ ok: false, reason: "json" }, 400); }
   const action = String(body.action || "");
+  let accForRefund: { id: string; is_admin: boolean } | null = null;
   try {
     const cfg = await config();
 
@@ -208,6 +235,7 @@ Deno.serve(async (req) => {
 
     const acc = await account(body.ka_token);
     if (!acc) return json({ ok: false, reason: "auth" }, 401);
+    accForRefund = acc;
 
     // 保護者のメールアドレスへ認証メールを送る（仮登録 → 本登録）
     if (action === "parent_verify_send") {
@@ -233,6 +261,87 @@ Deno.serve(async (req) => {
       let items: { word: string; meaning: string }[] = [];
       try { items = JSON.parse(out.replace(/^```json\s*|```$/g, "")).items || []; } catch { return json({ ok: false, reason: "parse" }); }
       return json({ ok: true, items: items.map((i) => ({ word: clip(i.word, 60), meaning: clip(i.meaning, 80) })) });
+    }
+
+    // ---- テーマから単語リストを作る ----
+    if (action === "gen_list") {
+      const theme = clip(body.theme, 100).trim(); const n = Math.max(5, Math.min(50, Number(body.count) || 20)); const level = clip(body.level, 30);
+      if (!theme) return json({ ok: false, reason: "empty" });
+      if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
+      const out = await gemini(cfg, `あなたは中高生向けの英語の先生です。指定のテーマに合う英単語・英熟語を${n}個選び、それぞれ代表的な日本語の意味を短く付けてください。重複なし、実際によく使うものを優先。難しさ: ${level || "テーマに合わせて"}。
+必ず JSON だけを返す: {"title":"リストのタイトル（日本語20文字以内）","items":[{"word":"...","meaning":"..."}]}`, [{ role: "user", text: theme }], true);
+      try { const j = parseJson(out); return json({ ok: true, title: clip(j.title, 40), items: (j.items || []).slice(0, n).map((i: Record<string, unknown>) => ({ word: clip(i.word, 60), meaning: clip(i.meaning, 80) })) }); }
+      catch (_e) { return json({ ok: false, reason: "parse" }); }
+    }
+
+    // ---- 似た単語・反対語・派生語 ----
+    if (action === "related") {
+      const words = wordsOf(body.words, 40);
+      if (!words.length) return json({ ok: false, reason: "empty" });
+      if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
+      const out = await gemini(cfg, `与えられた英単語それぞれについて、覚えておくと役に立つ「類義語」「反意語」「派生語」を、ある場合だけ合わせて1〜3個あげ、日本語の意味を付けてください。中高生がよく使うものを優先。入力にすでにある単語は出さない。
+必ず JSON だけを返す: {"items":[{"base":"元の単語","word":"関連する単語","meaning":"意味","type":"類義語|反意語|派生語"}]}`, [{ role: "user", text: JSON.stringify(words) }], true);
+      try { const j = parseJson(out); return json({ ok: true, items: (j.items || []).slice(0, 120).map((i: Record<string, unknown>) => ({ base: clip(i.base, 60), word: clip(i.word, 60), meaning: clip(i.meaning, 80), type: clip(i.type, 6) })) }); }
+      catch (_e) { return json({ ok: false, reason: "parse" }); }
+    }
+
+    // ---- 穴埋め問題 ----
+    if (action === "cloze") {
+      const items = (Array.isArray(body.items) ? body.items : []).slice(0, 10).map((i: Record<string, unknown>) => ({ w: clip(i.w, 60), m: clip(i.m, 80) })).filter((i) => i.w);
+      if (!items.length) return json({ ok: false, reason: "empty" });
+      if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
+      const out = await gemini(cfg, `中高生向けの英語の穴埋め問題を作ります。与えられた単語それぞれについて、その単語が自然に入る短い英文（8〜14語）を1つ作り、その単語の部分を「___」にしてください。動詞の活用や複数形が必要なら、answer はその形にする（例: go → went）。和訳も付ける。
+必ず JSON だけを返す: {"items":[{"word":"元の単語","answer":"空所に入る形","sentence":"英文（___ を含む）","ja":"和訳"}]}`, [{ role: "user", text: JSON.stringify(items) }], true);
+      try {
+        const j = parseJson(out);
+        return json({ ok: true, items: (j.items || []).slice(0, 10).map((i: Record<string, unknown>) => ({ word: clip(i.word, 60), answer: clip(i.answer, 60), sentence: clip(i.sentence, 240), ja: clip(i.ja, 200) })).filter((i: { sentence: string }) => i.sentence.includes("___")) });
+      } catch (_e) { return json({ ok: false, reason: "parse" }); }
+    }
+
+    // ---- 英会話ロールプレイ ----
+    if (action === "roleplay") {
+      if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
+      const scene = clip(body.scene, 60) || "自由な会話";
+      const words = wordsOf(body.words, 8);
+      const history = (Array.isArray(body.history) ? body.history : []).slice(-12).map((h: Record<string, unknown>) => ({ role: h.role === "model" ? "model" : "user", text: clip(h.text, 600) }));
+      const msg = clip(body.message, 400);
+      const sys = `あなたは英語学習アプリの会話相手です。場面: 「${scene}」。相手は中高生の英語学習者です。
+- やさしい英語（1〜2文、15語くらいまで）で、場面に合った役（店員・友だちなど）として返事をし、会話が続くように質問も入れる。
+- 練習したい単語: ${words.join(", ") || "なし"}。相手が自然に使えるような流れを作る（直接「使って」とは言わない）。
+- 相手の英語に間違いがあれば、feedback に日本語で短く直し方を書く（正しければ「いいね！」など短く）。最初のあいさつのときは feedback は空にする。
+必ず JSON だけを返す: {"reply":"英語の返事","ja":"返事の和訳","feedback":"相手の英語へのひとこと（日本語）"}`;
+      const out = await gemini(cfg, sys, msg ? [...history, { role: "user", text: msg }] : [{ role: "user", text: "（会話を始めてください。あなたから最初のひとことを）" }], true);
+      try { const j = parseJson(out); return json({ ok: true, reply: clip(j.reply, 500), ja: clip(j.ja, 500), feedback: clip(j.feedback, 300) }); }
+      catch (_e) { return json({ ok: false, reason: "parse" }); }
+    }
+
+    // ---- 振り返りレポート ----
+    if (action === "review") {
+      if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
+      const text = await gemini(cfg, `${SYS_AGENT}\n\n今回は「1週間の振り返りレポート」を書きます。構成: 1) この1週間のまとめ（数字を使って） 2) 伸びたところ 3) 苦手の傾向（どんな種類の単語でまちがえやすいか） 4) 来週の目標を3つ（具体的に）。全体で400字くらい。`,
+        [{ role: "user", text: `【記録】\n${clip(body.summary, 3000)}\n【苦手な単語】\n${weakText(body.weak)}` }]);
+      return json({ ok: true, text: clip(text, 6000) });
+    }
+
+    // ---- 手書きメモの読み取り ----
+    if (action === "ocr_memo") {
+      const img = String(body.image || "");
+      const m = img.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/);
+      if (!m || m[2].length > 4_000_000) return json({ ok: false, reason: "image" });
+      if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
+      const out = await gemini(cfg, `画像は手書きのノートです。書かれている英単語・英熟語をすべて読み取り、それぞれに日本語の意味を付けてください。ノートに日本語の意味が書いてあればそれを優先し、なければ代表的な意味を付ける。英語でない文字や、判読できないものは除く。
+必ず JSON だけを返す: {"items":[{"word":"...","meaning":"..."}]}`, [{ role: "user", text: "このノートの英単語を読み取ってください。", image: { mime: m[1], data: m[2] } }], true);
+      try { const j = parseJson(out); return json({ ok: true, items: (j.items || []).slice(0, 200).map((i: Record<string, unknown>) => ({ word: clip(i.word, 60), meaning: clip(i.meaning, 80) })).filter((i: { word: string }) => i.word) }); }
+      catch (_e) { return json({ ok: false, reason: "parse" }); }
+    }
+
+    // ---- ことば図鑑の解説 ----
+    if (action === "dex_explain") {
+      const w = clip(body.word, 40), ja = clip(body.ja, 60);
+      if (!w) return json({ ok: false, reason: "empty" });
+      if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
+      const text = await gemini(cfg, `${SYS_AGENT}\n\n英単語を1つ、図鑑の解説のように紹介します。構成: 語源（どこから来た言葉か）／よく使う言い方（例文2つ、和訳つき）／ちょっと面白い豆知識。全体で250字くらい。`, [{ role: "user", text: `${w}（${ja}）` }]);
+      return json({ ok: true, text: clip(text, 3000) });
     }
 
     if (action === "agent") {
@@ -282,6 +391,9 @@ Deno.serve(async (req) => {
     }
     return json({ ok: false, reason: "action" }, 400);
   } catch (e) {
-    return json({ ok: false, reason: String((e as Error).message || e) }, 200);
+    const msg = String((e as Error).message || e);
+    // AI の失敗は、その日の利用回数に数えない
+    if (accForRefund && !accForRefund.is_admin && /^gemini_/.test(msg)) { try { await sb.rpc("engdy_internal_ai_refund", { p_account: accForRefund.id }); } catch (_e) { /* 無視 */ } }
+    return json({ ok: false, reason: msg }, 200);
   }
 });

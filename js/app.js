@@ -15,7 +15,7 @@ import { CHANGELOG } from "./changelog.js";
 import "./memo.js";
 import { initPwa, install, canInstall, isStandalone, isIOS, onPwaChange, cacheMusic, musicCached, clearMusic, musicTotal } from "./pwa.js";
 
-export const VERSION = "1.8.0";
+export const VERSION = "1.9.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================

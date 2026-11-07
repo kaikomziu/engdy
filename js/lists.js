@@ -183,6 +183,79 @@ $("#autoMeaning").onclick = async () => {
   } finally { btn.disabled = false; btn.textContent = "✨ 意味を自動で付ける"; }
 };
 
+// ---- AI：テーマから単語リストを作る ----
+function needLogin() { if (token()) return false; toast("AI の機能は、ログインすると使えます"); KaAccount.login("login"); return true; }
+$("#genList").onclick = async () => {
+  if (needLogin()) return;
+  const req = await modal(`<p class="kicker">AI</p><h3>🪄 テーマから単語リストを作る</h3>
+    <label class="field"><span>テーマ</span><input id="glTheme" maxlength="100" placeholder="例：旅行で使う英語／英検3級の動詞／天気と季節"></label>
+    <div class="field"><span>単語の数</span><div class="seg" id="glN">${[10, 20, 30, 50].map((n) => `<button data-n="${n}" class="${n === 20 ? "on" : ""}">${n}語</button>`).join("")}</div></div>
+    <label class="field"><span>むずかしさ</span><select id="glLv"><option value="">おまかせ</option><option>中学1年</option><option>中学2年</option><option>中学3年</option><option>高校</option><option>英検3級</option><option>英検準2級</option><option>英検2級</option><option>TOEIC 600点</option></select></label>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" data-close>キャンセル</button><button class="btn pri" id="glGo">作る</button></div>`,
+    (c, close) => {
+      c.querySelector("#glN").onclick = (e) => { const b = e.target.closest("[data-n]"); if (b) c.querySelectorAll("#glN button").forEach((x) => x.classList.toggle("on", x === b)); };
+      const go = () => { const t = c.querySelector("#glTheme").value.trim(); if (!t) { toast("テーマを入れてください"); return; } close({ theme: t, count: +c.querySelector("#glN .on").dataset.n, level: c.querySelector("#glLv").value }); };
+      c.querySelector("#glGo").onclick = go; c.querySelector("#glTheme").onkeydown = (e) => { if (e.key === "Enter" && !e.isComposing) go(); };
+      setTimeout(() => c.querySelector("#glTheme").focus(), 50);
+    });
+  if (!req) return;
+  const btn = $("#genList"); btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> 作成中…`;
+  const r = await fn("gen_list", req);
+  btn.disabled = false; btn.textContent = "🪄 テーマから作る";
+  if (!r.ok) { toast(reasonText(r.reason)); return; }
+  const items = r.items.filter((i) => i.word);
+  const how = await modal(`<p class="kicker">AI</p><h3>${esc(r.title || req.theme)}（${items.length}語）</h3>
+    <div class="preview" style="max-height:44vh"><table>${items.map((i) => `<tr><td>${esc(i.word)}</td><td>${esc(i.meaning)}</td></tr>`).join("")}</table></div>
+    <p class="hint">AI が作ったので、意味がずれていることもあります。保存したあとで直せます。</p>
+    <div class="row wrap" style="justify-content:flex-end"><button class="btn ghost" data-close>やめる</button>${cur() || $("#listWords").value.trim() ? `<button class="btn" data-how="append">今のリストに足す</button>` : ""}<button class="btn pri" data-how="new">新しいリストにする</button></div>`,
+    (c, close) => c.querySelectorAll("[data-how]").forEach((b) => (b.onclick = () => close(b.dataset.how))));
+  if (!how) return;
+  const lines = items.map((i) => `${i.word}, ${i.meaning}`).join("\n");
+  if (how === "new") {
+    flushAuto();
+    const l = { id: uid(), title: (r.title || req.theme).slice(0, 60), words: parseWords(lines), updated: Date.now() };
+    lists.unshift(l); saveLists(lists); curId = l.id; fillEditor(); renderMyLists();
+  } else {
+    $("#listWords").value = ($("#listWords").value.trim() ? $("#listWords").value.trim() + "\n" : "") + lines;
+    renderPreview(); autosave();
+  }
+  tone("ok"); toast(`${items.length}語を入れました`);
+};
+
+// ---- AI：似た単語・反対語・派生語 ----
+$("#relWords").onclick = async () => {
+  if (needLogin()) return;
+  const words = parseWords($("#listWords").value);
+  if (!words.length) { toast("先に単語を入れてください"); return; }
+  const btn = $("#relWords"); btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> 探しています…`;
+  const r = await fn("related", { words: words.slice(0, 40).map((x) => x.w) });
+  btn.disabled = false; btn.textContent = "🔗 似た単語・反対語";
+  if (!r.ok) { toast(reasonText(r.reason)); return; }
+  const have = new Set(words.map((x) => x.w.toLowerCase()));
+  const items = r.items.filter((i) => i.word && !have.has(i.word.toLowerCase()));
+  if (!items.length) { toast("足せる単語は見つかりませんでした"); return; }
+  const TYPE_CLS = { 類義語: "", 反意語: "pw", 派生語: "url" };
+  const picked = await modal(`<p class="kicker">AI</p><h3>🔗 いっしょに覚えたい単語</h3>
+    <p class="hint">足したい単語にチェックを入れてください。${words.length > 40 ? "（最初の40語から探しました）" : ""}</p>
+    <div class="rel-list">${items.map((i, k) => `<label class="rel-item"><input type="checkbox" data-k="${k}" checked><span><b>${esc(i.word)}</b> <span class="badge ${TYPE_CLS[i.type] ?? ""}">${esc(i.type)}</span><small>${esc(i.meaning)} ・ ${esc(i.base)} の${esc(i.type)}</small></span></label>`).join("")}</div>
+    <div class="row wrap" style="justify-content:flex-end"><button class="btn ghost" id="relNone">全部はずす</button><button class="btn ghost" data-close>やめる</button><button class="btn pri" id="relAdd">選んだ単語を足す</button></div>`,
+    (c, close) => {
+      c.querySelector("#relNone").onclick = () => c.querySelectorAll("[data-k]").forEach((x) => (x.checked = false));
+      c.querySelector("#relAdd").onclick = () => close([...c.querySelectorAll("[data-k]:checked")].map((x) => items[+x.dataset.k]));
+    });
+  if (!picked || !picked.length) return;
+  $("#listWords").value = $("#listWords").value.trim() + "\n" + picked.map((i) => `${i.word}, ${i.meaning}`).join("\n");
+  renderPreview(); autosave(); tone("ok"); toast(`${picked.length}語を足しました`);
+};
+
+// 自由メモなど、ほかの画面からリストを作る
+export function createListFrom(title, items) {
+  lists = loadLists();
+  const l = { id: uid(), title: title.slice(0, 60), words: parseWords(items.map((i) => (i.meaning ? `${i.word}, ${i.meaning}` : i.word)).join("\n")), updated: Date.now() };
+  lists.unshift(l); saveLists(lists); curId = l.id;
+  return l;
+}
+
 // ---- .engdy ファイル ----
 $("#exportFile").onclick = async () => {
   const l = saveLocal(true); if (!l) return;

@@ -1,7 +1,7 @@
 // Engdy のサービスワーカー：ホーム画面に追加したアプリとして動かすため・オフラインで使うため
 // 更新したら VERSION を上げる（古いキャッシュを消して入れ直す）
-const VERSION = "engdy-1.8.0";
-const V = "?v=1.8.0";
+const VERSION = "engdy-1.9.0";
+const V = "?v=1.9.0";
 const MUSIC = "engdy-music";
 const SHELL = [
   "./", "./index.html", `./css/style.css${V}`, "./icon.svg", "./manifest.webmanifest",

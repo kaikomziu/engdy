@@ -3,6 +3,8 @@ import { $, $$, esc, toast } from "./util.js";
 import { S, save } from "./store.js";
 import { onEnter, onBack } from "./router.js";
 import { sfx, tone, duck } from "./audio.js";
+import { fn, token, reasonText } from "./api.js";
+import { modal, miniMarkdown } from "./util.js";
 import { RARITY, ORDER, COST1, COST10, PITY, DUP_REFUND, DEX, BGS, THEMES, ALL, byId, itemName, itemIcon, itemSub } from "./items.js";
 
 // ================= きせかえを反映 =================
@@ -241,6 +243,27 @@ const fx = (() => {
   };
 })();
 
+// 図鑑の1語をくわしく（AI の解説つき。いちど見た解説は保存しておく）
+function openDex(d) {
+  S.dexAI ||= {};
+  const body = () => S.dexAI[d.id] ? `<div class="msg model dex-ai">${miniMarkdown(S.dexAI[d.id])}</div>` : `<button class="btn" id="dexAi">✨ AI の解説を見る</button>`;
+  modal(`<p class="kicker">${d.r} ・ WORD</p><div class="dex-head"><span class="gi">${d.icon}</span><div><h3 style="margin:0">${esc(d.en)}</h3><p class="note" style="margin:0">${esc(d.ja)}</p></div></div>
+    <p class="dex-ex">“${esc(d.ex)}”</p><div id="dexAiBox">${body()}</div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="dexSay">🔊 発音</button><button class="btn pri" data-close>閉じる</button></div>`,
+    (c) => {
+      c.querySelector("#dexSay").onclick = () => { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(`${d.en}. ${d.ex}`); u.lang = "en-US"; u.rate = 0.9; speechSynthesis.speak(u); } catch (e) {} };
+      const bind = () => { const b = c.querySelector("#dexAi"); if (b) b.onclick = async () => {
+        if (!token()) { toast("AI の解説は、ログインすると見られます"); return; }
+        b.disabled = true; b.innerHTML = `<span class="spinner"></span> 調べています…`;
+        const r = await fn("dex_explain", { word: d.en, ja: d.ja });
+        if (!r.ok) { toast(reasonText(r.reason)); b.disabled = false; b.textContent = "✨ AI の解説を見る"; return; }
+        S.dexAI[d.id] = r.text; save();
+        const box = c.querySelector("#dexAiBox"); if (box) box.innerHTML = body();
+      }; };
+      bind();
+    });
+}
+
 // ================= 図鑑・きせかえ =================
 onEnter("collection", renderCollection);
 let colTab = "dex";
@@ -267,6 +290,6 @@ function renderCollection() {
   $$("[data-dex]").forEach((b) => (b.onclick = () => {
     const d = DEX.find((x) => x.id === b.dataset.dex); if (!S.owned.dex[d.id]) return;
     try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(d.en); u.lang = "en-US"; speechSynthesis.speak(u); } catch (e) {}
-    toast(`${d.en}：${d.ex}`, 4000);
+    openDex(d);
   }));
 }
