@@ -182,6 +182,19 @@ async function sendReports(cfg: Config, freqs: Freq[], accountId: string | null 
   return { sent, failed };
 }
 
+// ---- AI の結果の使い回し（利用者みんなで共有） ----
+const ck = (w: unknown) => String(w ?? "").trim().toLowerCase();
+async function cacheGet(kind: string, keys: string[]): Promise<Record<string, unknown>> {
+  if (!keys.length) return {};
+  const { data } = await sb.rpc("engdy_internal_cache_get", { p_kind: kind, p_keys: [...new Set(keys)] });
+  return (data || {}) as Record<string, unknown>;
+}
+async function cachePut(kind: string, items: Record<string, unknown>) {
+  if (!Object.keys(items).length) return;
+  try { await sb.rpc("engdy_internal_cache_put", { p_kind: kind, p_items: items }); } catch (_e) { /* 保存に失敗しても結果は返す */ }
+}
+async function aiStat(saved: number, called: number) { try { await sb.rpc("engdy_internal_ai_stat", { p_saved: saved, p_called: called }); } catch (_e) { /* 無視 */ } }
+
 // AI の JSON の返事を読む（```json で囲まれていても大丈夫に）
 function parseJson(out: string) {
   const t = out.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
@@ -253,49 +266,102 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    // ---- 単語の意味（みんなで使い回す。保存済みの単語は AI を呼ばない） ----
     if (action === "meanings") {
       const words = (Array.isArray(body.words) ? body.words : []).map((w) => clip(w, 60).trim()).filter(Boolean).slice(0, 150);
       if (!words.length) return json({ ok: false, reason: "empty" });
-      if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
-      const out = await gemini(cfg, SYS_MEANING, [{ role: "user", text: JSON.stringify(words) }], true);
-      let items: { word: string; meaning: string }[] = [];
-      try { items = JSON.parse(out.replace(/^```json\s*|```$/g, "")).items || []; } catch { return json({ ok: false, reason: "parse" }); }
-      return json({ ok: true, items: items.map((i) => ({ word: clip(i.word, 60), meaning: clip(i.meaning, 80) })) });
+      const hit = await cacheGet("meaning", words.map(ck));
+      const need = words.filter((w) => !hit[ck(w)]);
+      const items = words.filter((w) => hit[ck(w)]).map((w) => ({ word: w, meaning: String(hit[ck(w)]) }));
+      if (need.length) {
+        if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
+        const out = await gemini(cfg, SYS_MEANING, [{ role: "user", text: JSON.stringify(need) }], true);
+        let got: { word: string; meaning: string }[] = [];
+        try { got = parseJson(out).items || []; } catch { return json({ ok: false, reason: "parse" }); }
+        const put: Record<string, string> = {};
+        for (const i of got) { const m = clip(i.meaning, 80); if (i.word && m) { put[ck(i.word)] = m; items.push({ word: clip(i.word, 60), meaning: m }); } }
+        await cachePut("meaning", put);
+      }
+      await aiStat(need.length ? 0 : 1, need.length ? 1 : 0);
+      return json({ ok: true, items, cached: words.length - need.length, ai: need.length > 0 });
     }
 
-    // ---- テーマから単語リストを作る ----
+    // ---- テーマから単語リストを作る（同じテーマ・語数・むずかしさなら使い回す。「別の案」は作り直す） ----
     if (action === "gen_list") {
       const theme = clip(body.theme, 100).trim(); const n = Math.max(5, Math.min(50, Number(body.count) || 20)); const level = clip(body.level, 30);
       if (!theme) return json({ ok: false, reason: "empty" });
+      const key = `${ck(theme).replace(/\s+/g, "")}|${n}|${level}`;
+      if (!body.fresh) {
+        const hit = await cacheGet("genlist", [key]);
+        if (hit[key]) { await aiStat(1, 0); return json({ ok: true, ...(hit[key] as object), cached: true }); }
+      }
       if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
       const out = await gemini(cfg, `あなたは中高生向けの英語の先生です。指定のテーマに合う英単語・英熟語を${n}個選び、それぞれ代表的な日本語の意味を短く付けてください。重複なし、実際によく使うものを優先。難しさ: ${level || "テーマに合わせて"}。
 必ず JSON だけを返す: {"title":"リストのタイトル（日本語20文字以内）","items":[{"word":"...","meaning":"..."}]}`, [{ role: "user", text: theme }], true);
-      try { const j = parseJson(out); return json({ ok: true, title: clip(j.title, 40), items: (j.items || []).slice(0, n).map((i: Record<string, unknown>) => ({ word: clip(i.word, 60), meaning: clip(i.meaning, 80) })) }); }
-      catch (_e) { return json({ ok: false, reason: "parse" }); }
+      try {
+        const j = parseJson(out);
+        const res = { title: clip(j.title, 40), items: (j.items || []).slice(0, n).map((i: Record<string, unknown>) => ({ word: clip(i.word, 60), meaning: clip(i.meaning, 80) })) };
+        await cachePut("genlist", { [key]: res });
+        // ついでに、単語の意味も使い回せるように保存
+        await cachePut("meaning", Object.fromEntries(res.items.filter((i: { word: string; meaning: string }) => i.word && i.meaning).map((i: { word: string; meaning: string }) => [ck(i.word), i.meaning])));
+        await aiStat(0, 1);
+        return json({ ok: true, ...res });
+      } catch (_e) { return json({ ok: false, reason: "parse" }); }
     }
 
-    // ---- 似た単語・反対語・派生語 ----
+    // ---- 似た単語・反対語・派生語（単語ごとに使い回す） ----
     if (action === "related") {
       const words = wordsOf(body.words, 40);
       if (!words.length) return json({ ok: false, reason: "empty" });
-      if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
-      const out = await gemini(cfg, `与えられた英単語それぞれについて、覚えておくと役に立つ「類義語」「反意語」「派生語」を、ある場合だけ合わせて1〜3個あげ、日本語の意味を付けてください。中高生がよく使うものを優先。入力にすでにある単語は出さない。
-必ず JSON だけを返す: {"items":[{"base":"元の単語","word":"関連する単語","meaning":"意味","type":"類義語|反意語|派生語"}]}`, [{ role: "user", text: JSON.stringify(words) }], true);
-      try { const j = parseJson(out); return json({ ok: true, items: (j.items || []).slice(0, 120).map((i: Record<string, unknown>) => ({ base: clip(i.base, 60), word: clip(i.word, 60), meaning: clip(i.meaning, 80), type: clip(i.type, 6) })) }); }
-      catch (_e) { return json({ ok: false, reason: "parse" }); }
+      type Rel = { base: string; word: string; meaning: string; type: string };
+      const hit = await cacheGet("related", words.map(ck));
+      const need = words.filter((w) => !hit[ck(w)]);
+      let items: Rel[] = words.filter((w) => hit[ck(w)]).flatMap((w) => hit[ck(w)] as Rel[]);
+      if (need.length) {
+        if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
+        const out = await gemini(cfg, `与えられた英単語それぞれについて、覚えておくと役に立つ「類義語」「反意語」「派生語」を、ある場合だけ合わせて1〜3個あげ、日本語の意味を付けてください。中高生がよく使うものを優先。
+必ず JSON だけを返す: {"items":[{"base":"元の単語","word":"関連する単語","meaning":"意味","type":"類義語|反意語|派生語"}]}`, [{ role: "user", text: JSON.stringify(need) }], true);
+        let got: Rel[] = [];
+        try { got = (parseJson(out).items || []).slice(0, 120).map((i: Record<string, unknown>) => ({ base: clip(i.base, 60), word: clip(i.word, 60), meaning: clip(i.meaning, 80), type: clip(i.type, 6) })); }
+        catch (_e) { return json({ ok: false, reason: "parse" }); }
+        const put: Record<string, Rel[]> = {};
+        for (const w of need) put[ck(w)] = got.filter((g) => ck(g.base) === ck(w));
+        await cachePut("related", put);
+        items = items.concat(got);
+      }
+      await aiStat(need.length ? 0 : 1, need.length ? 1 : 0);
+      return json({ ok: true, items, cached: words.length - need.length, ai: need.length > 0 });
     }
 
-    // ---- 穴埋め問題 ----
+    // ---- 穴埋め問題（単語ごとに英文をためておき、3つ以上たまった単語は AI を呼ばずにそこから出す） ----
     if (action === "cloze") {
       const items = (Array.isArray(body.items) ? body.items : []).slice(0, 10).map((i: Record<string, unknown>) => ({ w: clip(i.w, 60), m: clip(i.m, 80) })).filter((i) => i.w);
       if (!items.length) return json({ ok: false, reason: "empty" });
-      if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
-      const out = await gemini(cfg, `中高生向けの英語の穴埋め問題を作ります。与えられた単語それぞれについて、その単語が自然に入る短い英文（8〜14語）を1つ作り、その単語の部分を「___」にしてください。動詞の活用や複数形が必要なら、answer はその形にする（例: go → went）。和訳も付ける。
-必ず JSON だけを返す: {"items":[{"word":"元の単語","answer":"空所に入る形","sentence":"英文（___ を含む）","ja":"和訳"}]}`, [{ role: "user", text: JSON.stringify(items) }], true);
-      try {
-        const j = parseJson(out);
-        return json({ ok: true, items: (j.items || []).slice(0, 10).map((i: Record<string, unknown>) => ({ word: clip(i.word, 60), answer: clip(i.answer, 60), sentence: clip(i.sentence, 240), ja: clip(i.ja, 200) })).filter((i: { sentence: string }) => i.sentence.includes("___")) });
-      } catch (_e) { return json({ ok: false, reason: "parse" }); }
+      type Q = { word: string; answer: string; sentence: string; ja: string };
+      const hit = await cacheGet("cloze", items.map((i) => ck(i.w)));
+      const pool = (w: string) => ((hit[ck(w)] as Q[]) || []);
+      const ready = items.filter((i) => pool(i.w).length >= 3);
+      const need = items.filter((i) => pool(i.w).length < 3);
+      const qs: Q[] = ready.map((i) => { const p = pool(i.w); return p[Math.floor(Math.random() * p.length)]; });
+      if (need.length) {
+        if (!(await useAi(cfg, acc))) {
+          // 回数の上限でも、ためてある英文があれば出す
+          const some = need.filter((i) => pool(i.w).length).map((i) => pool(i.w)[0]);
+          if (!qs.length && !some.length) return json({ ok: false, reason: "limit" });
+          return json({ ok: true, items: [...qs, ...some], cached: true });
+        }
+        const out = await gemini(cfg, `中高生向けの英語の穴埋め問題を作ります。与えられた単語それぞれについて、その単語が自然に入る短い英文（8〜14語）を1つ作り、その単語の部分を「___」にしてください。動詞の活用や複数形が必要なら、answer はその形にする（例: go → went）。和訳も付ける。
+必ず JSON だけを返す: {"items":[{"word":"元の単語","answer":"空所に入る形","sentence":"英文（___ を含む）","ja":"和訳"}]}`, [{ role: "user", text: JSON.stringify(need) }], true);
+        let got: Q[] = [];
+        try { got = (parseJson(out).items || []).slice(0, 10).map((i: Record<string, unknown>) => ({ word: clip(i.word, 60), answer: clip(i.answer, 60), sentence: clip(i.sentence, 240), ja: clip(i.ja, 200) })).filter((i: Q) => i.sentence.includes("___")); }
+        catch (_e) { return json({ ok: false, reason: "parse" }); }
+        const put: Record<string, Q[]> = {};
+        for (const g of got) { const k = ck(g.word); const prev = put[k] || pool(g.word); if (!prev.some((x) => x.sentence === g.sentence)) put[k] = [...prev, g].slice(-8); }
+        await cachePut("cloze", put);
+        qs.push(...got);
+      }
+      await aiStat(need.length ? 0 : 1, need.length ? 1 : 0);
+      return json({ ok: true, items: qs.sort(() => Math.random() - 0.5), cached: !need.length });
     }
 
     // ---- 英会話ロールプレイ ----
@@ -339,8 +405,12 @@ Deno.serve(async (req) => {
     if (action === "dex_explain") {
       const w = clip(body.word, 40), ja = clip(body.ja, 60);
       if (!w) return json({ ok: false, reason: "empty" });
+      const hit = await cacheGet("dex", [ck(w)]);
+      if (hit[ck(w)]) { await aiStat(1, 0); return json({ ok: true, text: String(hit[ck(w)]), cached: true }); }
       if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
-      const text = await gemini(cfg, `${SYS_AGENT}\n\n英単語を1つ、図鑑の解説のように紹介します。構成: 語源（どこから来た言葉か）／よく使う言い方（例文2つ、和訳つき）／ちょっと面白い豆知識。全体で250字くらい。`, [{ role: "user", text: `${w}（${ja}）` }]);
+      const text = await gemini(cfg, `${SYS_AGENT}\n\n英単語を1つ、図鑑の解説のように紹介します。構成: 語源（どこから来た言葉か）／よく使う言い方（例文2つ、和訳つき）／ちょっと面白い豆知識。全体で250字くらい。呼びかけは入れず、だれが読んでも同じ文章にする。`, [{ role: "user", text: `${w}（${ja}）` }]);
+      await cachePut("dex", { [ck(w)]: clip(text, 3000) });
+      await aiStat(0, 1);
       return json({ ok: true, text: clip(text, 3000) });
     }
 

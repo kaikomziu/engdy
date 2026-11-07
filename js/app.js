@@ -16,7 +16,7 @@ import "./memo.js";
 import { voices, say } from "./voice.js";
 import { initPwa, install, canInstall, isStandalone, isIOS, onPwaChange, cacheMusic, musicCached, clearMusic, musicTotal } from "./pwa.js";
 
-export const VERSION = "1.10.0";
+export const VERSION = "1.11.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -501,7 +501,9 @@ async function renderAdmin() {
   body.innerHTML = `
   <div class="card"><h3 class="sec">利用状況</h3><div class="adm-kpi">
     <div>リスト<b>${c.lists}</b></div><div>全体公開<b>${c.public_lists}</b></div><div>7日の学習者<b>${c.learners_7d}</b></div>
-    <div>保護者メール<b>${c.parents_active}</b></div><div>今日の AI 利用<b>${c.ai_today}</b></div></div></div>
+    <div>保護者メール<b>${c.parents_active}</b></div><div>今日の AI 利用<b>${c.ai_today}</b></div>
+    <div>AI の保存済み結果<b>${c.ai_cache}</b></div><div>7日で節約した呼び出し<b>${c.ai_saved_7d}</b></div><div>7日で呼んだ回数<b>${c.ai_called_7d}</b></div></div>
+    <p class="hint">単語の意味・似た単語・穴埋めの英文・図鑑の解説・テーマのリストは、いちど AI に聞いた結果をみんなで使い回します。</p></div>
   <div class="card adm-grid"><h3 class="sec">Gemini（専属エージェント・意味の自動入力）</h3>
     ${inp("gemini_key", "API キー", "AIza…（空で保存すると削除）", true)}
     ${inp("gemini_model", "モデル", "gemini-3.6-flash")}

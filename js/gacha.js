@@ -258,6 +258,7 @@ function openDex(d) {
         const r = await fn("dex_explain", { word: d.en, ja: d.ja });
         if (!r.ok) { toast(reasonText(r.reason)); b.disabled = false; b.textContent = "✨ AI の解説を見る"; return; }
         S.dexAI[d.id] = r.text; save();
+        if (r.cached) toast("♻️ 保存済みの解説です（AI の回数は減っていません）", 2500);
         const box = c.querySelector("#dexAiBox"); if (box) box.innerHTML = body();
       }; };
       bind();

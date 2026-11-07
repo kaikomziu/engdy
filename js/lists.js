@@ -166,22 +166,43 @@ $("#deleteList").onclick = async () => {
 // ---- 意味の自動入力（Gemini） ----
 $("#autoMeaning").onclick = async () => {
   const words = parseWords($("#listWords").value);
-  const need = words.filter((x) => !x.m);
+  let need = words.filter((x) => !x.m);
   if (!need.length) { toast("意味のない単語はありません"); return; }
-  if (!token()) { toast("意味の自動入力は、ログインすると使えます"); KaAccount.login("login"); return; }
+  // 端末の中にある意味（見た単語・ほかのリスト・サンプル）を先に使う。見つかった単語は AI に聞かない
+  const local = localDict();
+  let filled = 0;
+  for (const x of need) { const m = local.get(x.w.toLowerCase()); if (m) { x.m = m; filled++; } }
+  need = need.filter((x) => !x.m);
+  if (!need.length) { $("#listWords").value = wordsToText(words); renderPreview(); autosave(); toast(`${filled}語の意味を、端末にある辞書から付けました（AI は使っていません）`, 3500); return; }
+  if (!token()) {
+    if (filled) { $("#listWords").value = wordsToText(words); renderPreview(); autosave(); }
+    toast(`${filled ? filled + "語は端末の辞書から付けました。" : ""}残り${need.length}語の自動入力は、ログインすると使えます`, 3500); KaAccount.login("login"); return;
+  }
   const btn = $("#autoMeaning"); btn.disabled = true;
+  let shared = 0, usedAi = false;
   try {
     for (let i = 0; i < need.length; i += 120) {
       btn.innerHTML = `<span class="spinner"></span> ${Math.min(i + 120, need.length)} / ${need.length}`;
       const r = await fn("meanings", { words: need.slice(i, i + 120).map((x) => x.w) });
       if (!r.ok) { toast(reasonText(r.reason)); break; }
+      shared += r.cached || 0; usedAi ||= !!r.ai;
       const map = new Map(r.items.map((it) => [it.word.toLowerCase(), it.meaning]));
       for (const x of need) { const m = map.get(x.w.toLowerCase()); if (m) x.m = m; }
     }
-    $("#listWords").value = wordsToText(words); renderPreview();
-    toast("意味を付けました（確認して保存してください）");
+    $("#listWords").value = wordsToText(words); renderPreview(); autosave();
+    const parts = [filled && `端末の辞書から${filled}語`, shared && `みんなの保存済みから${shared}語`].filter(Boolean);
+    toast(`意味を付けました${parts.length ? "（" + parts.join("・") + "）" : ""}${usedAi ? "" : "。AI の回数は減っていません"}`, 3800);
   } finally { btn.disabled = false; btn.textContent = "✨ 意味を自動で付ける"; }
 };
+
+// 端末の中にある「英単語 → 意味」（見た単語・自分のリスト・サンプル）
+function localDict() {
+  const m = new Map();
+  for (const x of SAMPLE_WORDS) m.set(x.w.toLowerCase(), x.m);
+  for (const l of loadLists()) for (const x of l.words) if (x.m) m.set(x.w.toLowerCase(), x.m);
+  for (const [w, r] of Object.entries(S.words)) if (r.m) m.set(w.toLowerCase(), r.m);
+  return m;
+}
 
 // ---- AI：テーマから単語リストを作る ----
 function needLogin() { if (token()) return false; toast("AI の機能は、ログインすると使えます"); KaAccount.login("login"); return true; }
@@ -200,16 +221,28 @@ $("#genList").onclick = async () => {
     });
   if (!req) return;
   const btn = $("#genList"); btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> 作成中…`;
-  const r = await fn("gen_list", req);
+  let r = await fn("gen_list", req);
   btn.disabled = false; btn.textContent = "🪄 テーマから作る";
   if (!r.ok) { toast(reasonText(r.reason)); return; }
+  while (true) {
+    const again = await showGenResult(r, req);
+    if (again !== "fresh") { if (again) applyGen(r, req, again); return; }
+    btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> 作成中…`;
+    r = await fn("gen_list", { ...req, fresh: true });
+    btn.disabled = false; btn.textContent = "🪄 テーマから作る";
+    if (!r.ok) { toast(reasonText(r.reason)); return; }
+  }
+};
+function showGenResult(r, req) {
   const items = r.items.filter((i) => i.word);
-  const how = await modal(`<p class="kicker">AI</p><h3>${esc(r.title || req.theme)}（${items.length}語）</h3>
+  return modal(`<p class="kicker">AI</p><h3>${esc(r.title || req.theme)}（${items.length}語）</h3>
     <div class="preview" style="max-height:44vh"><table>${items.map((i) => `<tr><td>${esc(i.word)}</td><td>${esc(i.meaning)}</td></tr>`).join("")}</table></div>
-    <p class="hint">AI が作ったので、意味がずれていることもあります。保存したあとで直せます。</p>
-    <div class="row wrap" style="justify-content:flex-end"><button class="btn ghost" data-close>やめる</button>${cur() || $("#listWords").value.trim() ? `<button class="btn" data-how="append">今のリストに足す</button>` : ""}<button class="btn pri" data-how="new">新しいリストにする</button></div>`,
+    <p class="hint">${r.cached ? "♻️ 同じテーマで前に作られたリストです（AI の回数は減っていません）。ちがう単語にしたいときは「別の案」を押してください。" : "AI が作ったので、意味がずれていることもあります。保存したあとで直せます。"}</p>
+    <div class="row wrap" style="justify-content:flex-end"><button class="btn ghost" data-close>やめる</button><button class="btn ghost" data-how="fresh">別の案（AI）</button>${cur() || $("#listWords").value.trim() ? `<button class="btn" data-how="append">今のリストに足す</button>` : ""}<button class="btn pri" data-how="new">新しいリストにする</button></div>`,
     (c, close) => c.querySelectorAll("[data-how]").forEach((b) => (b.onclick = () => close(b.dataset.how))));
-  if (!how) return;
+}
+function applyGen(r, req, how) {
+  const items = r.items.filter((i) => i.word);
   const lines = items.map((i) => `${i.word}, ${i.meaning}`).join("\n");
   if (how === "new") {
     flushAuto();
@@ -220,7 +253,7 @@ $("#genList").onclick = async () => {
     renderPreview(); autosave();
   }
   tone("ok"); toast(`${items.length}語を入れました`);
-};
+}
 
 // ---- AI：似た単語・反対語・派生語 ----
 $("#relWords").onclick = async () => {
@@ -231,6 +264,7 @@ $("#relWords").onclick = async () => {
   const r = await fn("related", { words: words.slice(0, 40).map((x) => x.w) });
   btn.disabled = false; btn.textContent = "🔗 似た単語・反対語";
   if (!r.ok) { toast(reasonText(r.reason)); return; }
+  if (!r.ai) toast("♻️ 保存済みの結果を使いました（AI の回数は減っていません）", 2500);
   const have = new Set(words.map((x) => x.w.toLowerCase()));
   const items = r.items.filter((i) => i.word && !have.has(i.word.toLowerCase()));
   if (!items.length) { toast("足せる単語は見つかりませんでした"); return; }
