@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Engdy">
-<link rel="stylesheet" href="css/style.css?v=1.11.2">
+<link rel="stylesheet" href="css/style.css?v=1.12.0">
 <script src="https://kaikomziu.github.io/game-links/js/karuwaka-account.js" data-game="engdy" data-keys="engdy_v1,engdy_lists,engdy_memo" data-badge="off"></script>
 </head>
 <body>
@@ -39,6 +39,7 @@
   <header class="topbar">
     <div class="brand"><b>Engdy</b><small>いんぐてぃー</small></div>
     <div class="top-right">
+      <button class="chip mode-btn" id="modeBtn" title="ライト／ダークを切りかえる">🌙</button>
       <span class="dia" title="ダイヤ">💎 <b id="diaCount">0</b></span>
       <button class="chip" id="acctBtn">ゲスト</button>
     </div>
@@ -48,6 +49,7 @@
     <div class="card resume" id="resumeCard" hidden></div>
     <div class="card next" id="nextCard" hidden></div>
     <div class="card next install" id="installCard" hidden></div>
+    <div class="card quote" id="quoteCard" hidden></div>
     <div class="stampcard card" id="stampCard"></div>
     <nav class="menu">
       <button class="mitem" data-go="create"><span class="mi-no">01</span><span class="mi-t">リスト制作<small>CREATE</small></span></button>
@@ -59,6 +61,7 @@
       <button class="mitem" data-go="memo"><span class="mi-no">07</span><span class="mi-t">自由メモ<small>NOTE</small></span></button>
     </nav>
     <div class="sub-links">
+      <button class="link" data-go="ranking">🏆 ランキング</button>
       <button class="link" data-go="collection">図鑑・きせかえ</button>
       <button class="link" data-go="parent">保護者メール</button>
       <button class="link" data-go="settings">設定</button>
@@ -144,6 +147,8 @@
     <div class="vipa" id="vIpa"></div>
     <div class="vmean" id="vMean"></div>
     <div class="vhint" id="vHint">タップで意味を表示</div>
+    <div class="vtools"><button class="btn sm" id="vDef">📖 英英</button><button class="btn sm" id="vEx">📝 例文</button><button class="btn sm" id="vMic">🎤 発音チェック</button></div>
+    <div class="vextra" id="vExtra" hidden></div>
     <div class="vtimer"><i id="vTimer"></i></div>
   </div>
   <div class="vctrl">
@@ -253,11 +258,20 @@
         <dt>データベース</dt><dd>Supabase</dd>
         <dt>効果音</dt><dd>OtoLogic（CC BY 4.0）<br>効果音ラボ</dd>
         <dt>発音</dt><dd>Free Dictionary API（dictionaryapi.dev）<br>録音：Wikimedia Commons（CC BY 3.0 US / CC BY-SA 3.0 など）</dd>
+        <dt>例文</dt><dd>Tatoeba（CC BY 2.0 FR）</dd>
+        <dt>類義語</dt><dd>Datamuse API</dd>
+        <dt>名言</dt><dd>ZenQuotes.io</dd>
         <dt>BGM</dt><dd>ふぁいの音楽置き場（fai-musics）<br>「ほっこりひととき」「静かな図書室で」「おひるすぎ」「黄昏メロウノート」「なんだっけ？」「ゆううつ雨模様」<br>MusMus（watson）「ひとやすみ」「Lightning Brain」<br>DOVA-SYNDROME しゃろう「2:23 AM」</dd>
       </dl>
-      <p class="hint">バージョン <span class="ver">v1.11.2</span></p>
+      <p class="hint">バージョン <span class="ver">v1.12.0</span></p>
     </div>
   </div>
+</section>
+
+<!-- ===== ランキング ===== -->
+<section id="s-ranking" class="screen">
+  <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">RANKING</p><h2>ランキング</h2></div></header>
+  <div class="page narrow" id="rankBody"></div>
 </section>
 
 <!-- ===== 更新履歴 ===== -->
@@ -284,7 +298,7 @@
 <div id="modal" class="modal" hidden><div class="modal-card card" id="modalCard"></div></div>
 <div id="toast" class="toast" hidden></div>
 
-<script type="importmap">{"imports":{"./js/agent.js":"./js/agent.js?v=1.11.2","./js/api.js":"./js/api.js?v=1.11.2","./js/app.js":"./js/app.js?v=1.11.2","./js/audio.js":"./js/audio.js?v=1.11.2","./js/changelog.js":"./js/changelog.js?v=1.11.2","./js/crypto.js":"./js/crypto.js?v=1.11.2","./js/gacha.js":"./js/gacha.js?v=1.11.2","./js/items.js":"./js/items.js?v=1.11.2","./js/lists.js":"./js/lists.js?v=1.11.2","./js/router.js":"./js/router.js?v=1.11.2","./js/stats.js":"./js/stats.js?v=1.11.2","./js/store.js":"./js/store.js?v=1.11.2","./js/test.js":"./js/test.js?v=1.11.2","./js/util.js":"./js/util.js?v=1.11.2","./js/view.js":"./js/view.js?v=1.11.2","./js/memo.js":"./js/memo.js?v=1.11.2","./js/sample.js":"./js/sample.js?v=1.11.2","./js/pwa.js":"./js/pwa.js?v=1.11.2","./js/voice.js":"./js/voice.js?v=1.11.2"}}</script>
-<script type="module" src="js/app.js?v=1.11.2"></script>
+<script type="importmap">{"imports":{"./js/agent.js":"./js/agent.js?v=1.12.0","./js/api.js":"./js/api.js?v=1.12.0","./js/app.js":"./js/app.js?v=1.12.0","./js/audio.js":"./js/audio.js?v=1.12.0","./js/changelog.js":"./js/changelog.js?v=1.12.0","./js/crypto.js":"./js/crypto.js?v=1.12.0","./js/gacha.js":"./js/gacha.js?v=1.12.0","./js/items.js":"./js/items.js?v=1.12.0","./js/lists.js":"./js/lists.js?v=1.12.0","./js/router.js":"./js/router.js?v=1.12.0","./js/stats.js":"./js/stats.js?v=1.12.0","./js/store.js":"./js/store.js?v=1.12.0","./js/test.js":"./js/test.js?v=1.12.0","./js/util.js":"./js/util.js?v=1.12.0","./js/view.js":"./js/view.js?v=1.12.0","./js/memo.js":"./js/memo.js?v=1.12.0","./js/sample.js":"./js/sample.js?v=1.12.0","./js/pwa.js":"./js/pwa.js?v=1.12.0","./js/voice.js":"./js/voice.js?v=1.12.0","./js/speech.js":"./js/speech.js?v=1.12.0","./js/social.js":"./js/social.js?v=1.12.0"}}</script>
+<script type="module" src="js/app.js?v=1.12.0"></script>
 </body>
 </html>

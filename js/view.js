@@ -7,7 +7,8 @@ import { go, onEnter, onLeave } from "./router.js";
 import { tone } from "./audio.js";
 import { awardLap, updateDia } from "./app.js";
 import { startList } from "./lists.js";
-import { ipaOf, prefetch } from "./voice.js";
+import { ipaOf, prefetch, defsOf, examplesOf } from "./voice.js";
+import { canListen, listen, stopListen } from "./speech.js";
 
 const IDLE_MS = 60000, MIN_WORDS_FOR_STAMP = 5;
 let V = null;     // いまの閲覧
@@ -56,6 +57,7 @@ function showWord() {
   $("#vBack").disabled = V.i === 0;
   if (S.settings.autoSpeak && !V.reverse) speak(x.w);
   showIpa(x, !V.reverse);
+  closeExtra();
   const nx = V.words[V.i + 1]; if (nx) prefetch(nx.w);
   remember();
 }
@@ -126,7 +128,7 @@ function tick() {
 function input() { if (V) V.lastInput = Date.now(); }
 let swiped = false;
 $("#viewer").addEventListener("click", (e) => {
-  if (e.target.closest("#viewSpeak")) return;
+  if (e.target.closest("#viewSpeak, .vtools, .vextra")) return;
   if (swiped) { swiped = false; return; }
   input(); advance();
 });
@@ -141,6 +143,37 @@ $("#viewer").addEventListener("touchend", (e) => {
     if (dx > 0) { if (V && V.phase === "word") reveal(); next(); } else prev();
   }
 }, { passive: true });
+// ---- 英英・例文・発音チェック（押すと自動で進むのを止める） ----
+function closeExtra() { const el = $("#vExtra"); el.hidden = true; el.innerHTML = ""; stopListen(); }
+function openExtra(html) { if (!V) return; input(); setHold(true); const el = $("#vExtra"); el.hidden = false; el.innerHTML = html; }
+$("#vDef").onclick = async () => {
+  if (!V) return; const x = V.words[V.i];
+  openExtra(`<span class="spinner"></span>`);
+  const defs = await defsOf(x.w);
+  if (!V || V.words[V.i] !== x) return;
+  openExtra(defs.length ? defs.map((d) => `<p><b class="pos">${esc(d.pos)}</b> ${esc(d.def)}${d.ex ? `<br><i class="note">“${esc(d.ex)}”</i>` : ""}</p>`).join("") + `<p class="note">Free Dictionary API</p>`
+    : `<p class="note">英英辞典に、この単語（熟語）の説明がありませんでした。</p>`);
+};
+$("#vEx").onclick = async () => {
+  if (!V) return; const x = V.words[V.i];
+  openExtra(`<span class="spinner"></span>`);
+  const ex = await examplesOf(x.w);
+  if (!V || V.words[V.i] !== x) return;
+  openExtra(ex.length ? ex.slice(0, 3).map((e, k) => `<p class="ex-row"><button class="link ex-say" data-k="${k}">🔊</button> ${esc(e.en)}<br><span class="note">${esc(e.ja)}</span></p>`).join("") + `<p class="note">例文：Tatoeba（CC BY 2.0 FR）</p>`
+    : `<p class="note">例文が見つかりませんでした。</p>`);
+  document.querySelectorAll(".ex-say").forEach((b) => (b.onclick = () => speak(ex[+b.dataset.k].en)));
+};
+$("#vMic").onclick = async () => {
+  if (!V) return; const x = V.words[V.i];
+  if (!canListen()) { openExtra(`<p class="note">このブラウザは音声の聞き取りに対応していません（Chrome・Edge・Android・iPhone の Safari で使えます）。</p>`); return; }
+  openExtra(`<p>🎤 「<b>${esc(x.w)}</b>」と言ってみよう… <span class="spinner"></span></p>`);
+  const r = await listen(x.w);
+  if (!V || V.words[V.i] !== x) return;
+  if (r.ok) { tone("ok"); openExtra(`<p class="mic-ok">◎ ばっちり！ 「${esc(r.heard)}」と聞こえました</p><button class="btn sm" id="vMic2">もう一度</button>`); }
+  else openExtra(`<p class="mic-ng">${r.near ? "△ おしい！" : r.heard ? "✕ ちょっとちがうかも" : r.error === "not-allowed" ? "マイクが使えません（ブラウザの設定でマイクを許可してください）" : "聞き取れませんでした"}${r.heard ? `　「${esc(r.heard)}」と聞こえました` : ""}</p><button class="btn sm" id="vMic2">もう一度</button> <button class="btn sm ghost" id="vMicSay">🔊 お手本</button>`);
+  const again = $("#vMic2"); if (again) again.onclick = () => $("#vMic").click();
+  const say = $("#vMicSay"); if (say) say.onclick = () => speak(x.w);
+};
 $("#viewSpeak").onclick = (e) => { e.stopPropagation(); input(); if (V) speak(V.words[V.i].w); };
 $("#vBack").onclick = () => { input(); prev(); };
 $("#vNext").onclick = () => { input(); advance(); };

@@ -3,8 +3,9 @@
 // 録音がない単語・熟語・例文は、端末の中でいちばん自然な英語の声で読み上げる。AI は使わない。
 import { setSpeaker } from "./util.js";
 import { S } from "./store.js";
+import { fn, token } from "./api.js";
 
-const KEY = "engdy_pron2";
+const KEY = "engdy_pron3";
 let cache = {};
 try { cache = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
 let saveT;
@@ -44,8 +45,13 @@ export function pron(word) {
         } catch (e) {}
       }
       const url = (x) => { if (!x) return ""; const id = (String(x.sourceUrl || "").match(/curid=(\d+)/) || [])[1]; return (id && direct[id]) || x.audio || ""; };
-      const r = { ipa, us: url(us), uk: url(uk), any: url(any) };
-      cache[w] = r.ipa || r.any ? r : 0; persist();
+      // 英英辞典の定義（品詞ごとに1つずつ、3つまで）
+      const defs = (Array.isArray(d) ? d : []).flatMap((e) => e.meanings || []).slice(0, 3).map((m) => {
+        const df = (m.definitions || [])[0] || {};
+        return { pos: m.partOfSpeech || "", def: String(df.definition || "").slice(0, 200), ex: String(df.example || "").slice(0, 160) };
+      }).filter((x) => x.def);
+      const r = { ipa, us: url(us), uk: url(uk), any: url(any), defs };
+      cache[w] = r.ipa || r.any || defs.length ? r : 0; persist();
       return cache[w] || null;
     })
     .catch(() => null)
@@ -96,6 +102,26 @@ function tts(text, rate) {
   } catch (e) {}
 }
 
+// ネイティブの声（Google Cloud の音声合成。ログイン中・管理者がキーを設定しているときだけ）
+const cloudCache = new Map();
+let cloudOff = 0;   // 使えなかったら、しばらく試さない
+async function cloud(text, rate) {
+  if (!token() || Date.now() < cloudOff || !navigator.onLine) return false;
+  const key = `${S.settings.accent === "uk" ? "uk" : "us"}|${text.toLowerCase()}`;
+  let b64 = cloudCache.get(key);
+  if (!b64) {
+    const r = await Promise.race([fn("tts", { text, accent: S.settings.accent === "uk" ? "uk" : "us" }), new Promise((ok) => setTimeout(() => ok(null), 6000))]);
+    if (!r || !r.ok) { cloudOff = Date.now() + (r && r.reason === "no_tts_key" ? 10 * 60e3 : 60e3); return false; }
+    b64 = r.audio; cloudCache.set(key, b64);
+    if (cloudCache.size > 200) cloudCache.delete(cloudCache.keys().next().value);
+  }
+  const a = new Audio("data:audio/mp3;base64," + b64);
+  a.volume = Math.max(0, Math.min(1, S.settings.voiceVol ?? 1));
+  a.playbackRate = Math.max(0.6, Math.min(1.3, rate / 0.9));
+  audio = a;
+  try { await a.play(); return true; } catch (e) { audio = null; return false; }
+}
+
 // 読み上げる（util.js の speak() から呼ばれる）
 export async function say(text, rate) {
   text = String(text || "").trim(); if (!text) return;
@@ -120,6 +146,7 @@ export async function say(text, rate) {
       audio = null;
     }
   }
+  if (st.voiceMode === "cloud" && (await cloud(text, r))) return;
   tts(text, r);
 }
 setSpeaker(say);
@@ -132,3 +159,20 @@ export async function ipaOf(word) {
 }
 // 次の単語を先に調べておく（待ち時間を減らす）
 export const prefetch = (word) => { if (S.settings.voiceMode !== "tts" || S.settings.showIpa !== false) pron(word); };
+
+// 英英辞典の定義
+export async function defsOf(word) {
+  const p = await pron(word);
+  return (p && p.defs) || [];
+}
+// 例文（Tatoeba。サーバーでみんなの分を保存している）
+const exCache = new Map();
+export async function examplesOf(word) {
+  const w = String(word || "").trim().toLowerCase();
+  if (!/^[a-z][a-z' -]{0,40}$/.test(w)) return [];
+  if (exCache.has(w)) return exCache.get(w);
+  const r = await fn("examples", { word: w }).catch(() => null);
+  const items = (r && r.ok && r.items) || [];
+  exCache.set(w, items);
+  return items;
+}

@@ -4,7 +4,7 @@ import { S, save, onSave, today, agentProgress } from "./store.js";
 import { rpc, fn, token, me, reasonText } from "./api.js";
 import { go, onEnter, onLeave } from "./router.js";
 import { tone, bgm, refreshBgm, TRACKS, SCENES, sceneTrack, SFX_CATS, testSfx, previewTrack, stopPreview, previewing } from "./audio.js";
-import { applySkin } from "./gacha.js";
+import { applySkin, isDarkMode } from "./gacha.js";
 import { openShared, addSample, startLast, lastListName } from "./lists.js";
 import { loadLists, testPool } from "./store.js";
 import { resumeView } from "./view.js";
@@ -14,9 +14,10 @@ import "./agent.js";
 import { CHANGELOG } from "./changelog.js";
 import "./memo.js";
 import { voices, say } from "./voice.js";
+import { renderQuote, notify, testDiscord, DISCORD_EVENTS, pushRank, leaveRank } from "./social.js";
 import { initPwa, install, canInstall, isStandalone, isIOS, onPwaChange, cacheMusic, musicCached, clearMusic, musicTotal } from "./pwa.js";
 
-export const VERSION = "1.11.2";
+export const VERSION = "1.12.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -30,6 +31,8 @@ export function awardLap() {
   if (S.stamp.card.length >= 7) { gained += CARD_BONUS; cardDone = true; }
   S.diamonds += gained;
   save(true);
+  notify("lap", `今日の英単語の閲覧が終わりました 📖（スタンプ ${S.stamp.card.length}/7）`);
+  if (cardDone) notify("card", "スタンプカードが完成しました！ 🎉");
   return { stamped: true, gained, cardDone, slot: S.stamp.card.length };
 }
 // カードが埋まったら、次にメインを開いたとき新しいカードにする
@@ -63,6 +66,7 @@ function renderMain(arg) {
   renderResume();
   renderNext();
   renderInstall();
+  renderQuote();
   renderStamp(arg && arg.newStamp);
   updateDia();
   const p = agentProgress();
@@ -87,7 +91,7 @@ function checkGoal() {
   if (!t || S.goal.done === k) return;
   const gm = S.settings.goalMin, gw = S.settings.goalWords;
   if (!gm && !gw) return;
-  if ((!gm || t.s >= gm * 60) && (!gw || t.w >= gw)) { S.goal.done = k; save(); toast("🎯 今日の目標を達成しました！", 3000); tone("combo"); }
+  if ((!gm || t.s >= gm * 60) && (!gw || t.w >= gw)) { S.goal.done = k; save(); toast("🎯 今日の目標を達成しました！", 3000); tone("combo"); notify("goal", `今日の目標を達成しました 🎯（${Math.floor(t.s / 60)}分・${t.w}語）`); }
 }
 
 // ================= 次にやること =================
@@ -210,6 +214,8 @@ function renderAccount() {
   $("#acctBtn").textContent = u ? `${u.avatar || "👤"} ${u.display_name || u.username}` : "ゲスト（ログイン）";
   $$(".admin-only").forEach((e) => (e.hidden = !(u && u.is_admin)));
 }
+// ライト／ダークをワンタップで切りかえる（「端末に合わせる」のときも、押せば今と反対にする）
+$("#modeBtn").onclick = () => { S.settings.mode = isDarkMode() ? "light" : "dark"; save(); applySkin(); tone("click"); };
 $("#acctBtn").onclick = () => { if (window.KaAccount) (KaAccount.isLoggedIn() ? KaAccount.openPanel() : KaAccount.login("login")); };
 
 // ================= ログイン画面 =================
@@ -236,6 +242,7 @@ let pushTimer, lastPushed = "";
 onSave(() => {
   updateDia();
   checkGoal();
+  pushRank(streakDays);
   if (!token()) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(pushDaily, 8000);
@@ -255,7 +262,11 @@ async function pushDaily() {
 // ================= 設定 =================
 onEnter("settings", () => {
   const st = S.settings;
-  $("#settingsBody").innerHTML = `<div class="card">
+  $("#settingsBody").innerHTML = `<div class="card"><h3 class="sec">🎨 画面</h3>
+    <div class="set-row"><label>画面の明るさ<small>ガチャで当てたテーマの色は、どちらでも使えます</small></label>
+      <div class="seg" id="setMode">${[["light", "☀️ ライト"], ["dark", "🌙 ダーク"], ["auto", "端末に合わせる"]].map(([v, t]) => `<button data-m="${v}" class="${(st.mode || "light") === v ? "on" : ""}">${t}</button>`).join("")}</div></div>
+  </div>
+  <div class="card">
     <div class="set-row"><label>意味が出るまで<small>閲覧で、単語が出てから意味を表示するまでの秒数</small></label><span><input type="range" min="1" max="10" step="0.5" id="setShow" value="${st.showDelay}"> <b id="setShowV">${st.showDelay}秒</b></span></div>
     <div class="set-row"><label>次の単語まで<small>意味が出てから次へ進むまでの秒数</small></label><span><input type="range" min="1" max="10" step="0.5" id="setNext" value="${st.nextDelay}"> <b id="setNextV">${st.nextDelay}秒</b></span></div>
     <div class="set-row"><label>振動<small>正解・不正解・スタンプのときに、スマホを軽くふるわせる（Android など対応機種のみ）</small></label><input type="checkbox" id="setVib" ${st.vibrate !== false ? "checked" : ""}></div>
@@ -264,7 +275,8 @@ onEnter("settings", () => {
   <div class="card"><h3 class="sec">🗣️ 読み上げ（発音）</h3>
     <div class="set-row"><label>自動で読み上げ<small>閲覧・テストで単語が出たときに、発音を流す</small></label><input type="checkbox" id="setSpeak" ${st.autoSpeak ? "checked" : ""}></div>
     <div class="set-row"><label>読み上げ方<small>「本物の発音」は、人が録音した発音を流します（1語の単語だけ。ない単語は合成音声）</small></label>
-      <div class="seg" id="setVMode"><button data-v="real" class="${st.voiceMode !== "tts" ? "on" : ""}">本物の発音を優先</button><button data-v="tts" class="${st.voiceMode === "tts" ? "on" : ""}">合成音声だけ</button></div></div>
+      <div class="seg" id="setVMode"><button data-v="real" class="${!st.voiceMode || st.voiceMode === "real" ? "on" : ""}">本物の発音を優先</button><button data-v="cloud" class="${st.voiceMode === "cloud" ? "on" : ""}">＋ネイティブの声</button><button data-v="tts" class="${st.voiceMode === "tts" ? "on" : ""}">合成音声だけ</button></div></div>
+    <p class="hint">「＋ネイティブの声」は、熟語や例文を Google のとても自然な声で読みます（ログインが必要。管理者が設定しているときだけ使えます）。</p>
     <div class="set-row"><label>アクセント</label><div class="seg" id="setAccent"><button data-a="us" class="${st.accent !== "uk" ? "on" : ""}">🇺🇸 アメリカ</button><button data-a="uk" class="${st.accent === "uk" ? "on" : ""}">🇬🇧 イギリス</button></div></div>
     <div class="set-row"><label>声（合成音声）<small>熟語・例文・録音のない単語に使う声。上にあるほど自然な声です</small></label><select id="setVoice" style="max-width:220px"></select></div>
     <div class="set-row"><label>速さ <small id="setRateV">${Math.round((st.voiceRate || 0.9) * 100)}%</small></label><input type="range" min="0.6" max="1.3" step="0.05" id="setRate" value="${st.voiceRate || 0.9}"></div>
@@ -295,6 +307,16 @@ onEnter("settings", () => {
     <div class="set-row"><label>時刻</label><input type="time" id="setNotifyTime" value="${st.notifyTime || "19:00"}"></div>
     <p class="hint">※ 通知は Engdy を開いている間（ほかのタブを見ていても OK）だけ届きます。スマホでは「ホーム画面に追加」して開いておくと確実です。</p>
   </div>
+  <div class="card"><h3 class="sec">💬 Discord に報告</h3>
+    <p class="hint">Discord のチャンネルの「連携サービス → ウェブフック」で作った URL を入れると、学習の報告がそのチャンネルに届きます（ログインが必要）。</p>
+    <label class="field"><span>Webhook の URL</span><input id="setDiscord" type="url" placeholder="https://discord.com/api/webhooks/…" value="${esc(st.discordUrl || "")}"></label>
+    ${DISCORD_EVENTS.map(([k, t]) => `<div class="set-row"><label>${t}</label><input type="checkbox" data-dev="${k}" ${!(st.discordEvents && st.discordEvents[k] === false) ? "checked" : ""}></div>`).join("")}
+    <div class="row"><button class="btn sm" id="setDiscordTest">テスト送信</button><button class="btn sm ghost" id="setDiscordClear">URL を消す</button></div>
+  </div>
+  <div class="card"><h3 class="sec">🏆 ランキング・ほか</h3>
+    <div class="set-row"><label>ランキングに参加する<small>連続学習日数・テストのベスト・図鑑の数・学習時間を、表示名といっしょに公開します（ログインが必要）</small></label><input type="checkbox" id="setRank" ${st.rankJoin !== false ? "checked" : ""}></div>
+    <div class="set-row"><label>メイン画面に「今日の名言」を出す</label><input type="checkbox" id="setQuote" ${st.showQuote !== false ? "checked" : ""}></div>
+  </div>
   <div class="card" id="appCard"></div>
   <div class="card"><h3 class="sec">データ</h3>
     <p class="hint">${me() ? "ログイン中なので、記録はかるわかGAMES のクラウドに自動で保存されます。" : "ゲストの記録はこのブラウザだけに保存されます。アカウントでログインすると、ほかの端末でも続きができます。"}</p>
@@ -307,6 +329,7 @@ onEnter("settings", () => {
   bind("#setShow", "showDelay", "#setShowV");
   bind("#setNext", "nextDelay", "#setNextV");
   bind("#setSpeak", "autoSpeak");
+  $("#setMode").onclick = (e) => { const b = e.target.closest("[data-m]"); if (!b) return; st.mode = b.dataset.m; save(); applySkin(); $$("#setMode button").forEach((x) => x.classList.toggle("on", x === b)); };
   // 読み上げ
   const fillVoices = () => {
     const vs = voices();
@@ -365,6 +388,17 @@ onEnter("settings", () => {
     save();
   };
   renderAppCard();
+  $("#setDiscord").onchange = (e) => { st.discordUrl = e.target.value.trim(); save(); };
+  $$("[data-dev]").forEach((c) => (c.onchange = () => { st.discordEvents = { ...(st.discordEvents || {}), [c.dataset.dev]: c.checked }; save(); }));
+  $("#setDiscordTest").onclick = async () => {
+    const url = $("#setDiscord").value.trim(); st.discordUrl = url; save();
+    if (!token()) { toast("Discord への報告は、ログインすると使えます"); return; }
+    const r = await testDiscord(url);
+    toast(r.ok ? "送りました。Discord を確かめてください" : r.reason === "webhook" ? "URL の形がちがいます（https://discord.com/api/webhooks/… ）" : reasonText(r.reason), 3500);
+  };
+  $("#setDiscordClear").onclick = () => { st.discordUrl = ""; save(); $("#setDiscord").value = ""; toast("消しました"); };
+  $("#setRank").onchange = async (e) => { st.rankJoin = e.target.checked; save(); if (!st.rankJoin) { await leaveRank(); toast("ランキングから外しました"); } else toast("ランキングに参加しました"); };
+  $("#setQuote").onchange = (e) => { st.showQuote = e.target.checked; save(); };
   $("#resetAll").onclick = async () => {
     if (!(await confirmBox("記録をすべて消しますか？", "統計・スタンプ・ダイヤ・図鑑・単語リストがこの端末から消えます。元に戻せません。", "消す", true))) return;
     localStorage.removeItem("engdy_v1"); localStorage.removeItem("engdy_lists");
@@ -520,6 +554,11 @@ async function renderAdmin() {
     ${inp("ai_daily_limit", "1人1日の AI 利用回数", "40")}
     ${inp("agent_enabled", "専属エージェント（on / off）", "on")}
     <div class="row" style="align-items:flex-start"><button class="btn" id="admAi">AI の動作確認</button><span class="note" id="admAiOut"></span></div></div>
+  <div class="card adm-grid"><h3 class="sec">Google Cloud 音声合成（ネイティブの読み上げ）</h3>
+    <p class="hint">Google Cloud の Text-to-Speech API のキー。設定すると、利用者が「＋ネイティブの声」を選んだとき、熟語や例文を自然な声で読みます。いちど作った音声はみんなで使い回します。</p>
+    ${inp("gcloud_tts_key", "API キー", "AIza…（空で保存すると削除）", true)}
+    ${inp("tts_daily_limit", "1人1日の回数（保存済みの音声は数えない）", "200")}
+  </div>
   <div class="card adm-grid"><h3 class="sec">AgentMail（保護者へのメール）</h3>
     ${inp("agentmail_key", "API キー", "am_…（空で保存すると削除）", true)}
     ${inp("agentmail_inbox", "送信元 inbox_id", "AgentMail の inbox_id")}

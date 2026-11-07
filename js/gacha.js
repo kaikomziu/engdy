@@ -8,18 +8,40 @@ import { modal, miniMarkdown, speak } from "./util.js";
 import { RARITY, ORDER, COST1, COST10, PITY, DUP_REFUND, DEX, BGS, THEMES, ALL, byId, itemName, itemIcon, itemSub } from "./items.js";
 
 // ================= きせかえを反映 =================
+// 画面の明るさ（ライト／ダーク／端末に合わせる）。だれでも最初から使える。テーマ（ガチャ）はアクセントの色を決める
+const DARK_BASE = { "--bg": "#16191a", "--paper": "#202425", "--ink": "#e8ebe9", "--sub": "#9aa5a0", "--line": "#343a39" };
+const LIGHT_BASE = { "--bg": "#f5f3ee", "--paper": "#fffdf9", "--ink": "#1f2a27", "--sub": "#66736e", "--line": "#e2ded5" };
+const DARK_THEMES = ["sumi", "midnight"];
+export const isDarkMode = () => { const m = S.settings.mode || "light"; return m === "dark" || (m === "auto" && matchMedia("(prefers-color-scheme: dark)").matches); };
+try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if ((S.settings.mode || "light") === "auto") applySkin(); }); } catch (e) {}
+
 export function applySkin() {
   const th = byId("theme", S.equip.theme) || THEMES[0];
   const root = document.documentElement;
   ["--bg", "--paper", "--ink", "--sub", "--line", "--accent", "--accent-soft"].forEach((k) => root.style.removeProperty(k));
-  for (const [k, v] of Object.entries(th.v)) root.style.setProperty(k, v);
+  const dark = isDarkMode();
+  const themeIsDark = DARK_THEMES.includes(th.id);
+  if (dark) {
+    // ダーク：もともと暗いテーマはそのまま、明るいテーマは土台だけ暗くしてアクセントの色を残す
+    const v = themeIsDark ? th.v : { ...DARK_BASE, ...(th.v["--accent"] ? { "--accent": th.v["--accent"] } : { "--accent": "#5fb59a" }) };
+    for (const [k, val] of Object.entries(v)) root.style.setProperty(k, val);
+    if (!themeIsDark) root.style.setProperty("--accent-soft", `color-mix(in srgb, ${v["--accent"]} 22%, ${DARK_BASE["--paper"]})`);
+  } else if (themeIsDark) {
+    // ライトなのに暗いテーマ：土台を明るくして、アクセントの色だけ使う
+    for (const [k, val] of Object.entries(LIGHT_BASE)) root.style.setProperty(k, val);
+    root.style.setProperty("--accent", th.v["--accent"]);
+    root.style.setProperty("--accent-soft", `color-mix(in srgb, ${th.v["--accent"]} 16%, #fff)`);
+  } else {
+    for (const [k, v] of Object.entries(th.v)) root.style.setProperty(k, v);
+  }
+  root.dataset.mode = dark ? "dark" : "light";
+  const mb = document.querySelector("#modeBtn"); if (mb) mb.textContent = dark ? "☀️" : "🌙";
   const bg = byId("bg", S.equip.bg) || BGS[0];
   const layer = $("#bgLayer");
   layer.style.background = bg.css === "none" ? "none" : bg.css;
   layer.style.animation = bg.anim === "aurora" ? "auroraMove 18s ease-in-out infinite alternate" : bg.anim === "drift" ? "driftMove 30s linear infinite" : "none";
   layer.style.backgroundSize = bg.anim === "aurora" ? "300% 300%" : "";
-  const dark = ["sumi", "midnight"].includes(th.id);
-  document.querySelector('meta[name="theme-color"]').content = dark ? th.v["--bg"] : (th.v["--bg"] || "#f5f3ee");
+  document.querySelector('meta[name="theme-color"]').content = getComputedStyle(root).getPropertyValue("--bg").trim() || "#f5f3ee";
 }
 const st = document.createElement("style");
 st.textContent = `@keyframes auroraMove{0%{background-position:0% 50%}100%{background-position:100% 50%}}@keyframes driftMove{to{background-position:90px 180px,70px 140px,0 0}}`;

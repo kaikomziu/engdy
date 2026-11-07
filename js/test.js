@@ -6,6 +6,9 @@ import { tone } from "./audio.js";
 import { startList } from "./lists.js";
 import { fn, token, reasonText } from "./api.js";
 import { toast } from "./util.js";
+import { examplesOf } from "./voice.js";
+import { canListen, listen, stopListen } from "./speech.js";
+import { notify } from "./social.js";
 
 const Q_TIME = 12, TYPE_TIME = 30, CLOZE_TIME = 25;   // 1問の制限時間（秒）。書き取り・穴埋めは長め
 let T = null;
@@ -27,9 +30,11 @@ function renderStart() {
     <p class="hint">閲覧で見た ${pool.length}語 から出題します。間違えた単語ほど、よく出ます。</p>
     <div class="t-opts">
       <div class="seg" id="optN">${[10, 20, 30].map((n) => `<button data-n="${n}" class="${opt.n === n ? "on" : ""}">${n}問</button>`).join("")}</div>
-      <div class="seg" id="optDir"><button data-d="en" class="${opt.dir === "en" ? "on" : ""}">英語 → 意味</button><button data-d="ja" class="${opt.dir === "ja" ? "on" : ""}">意味 → 英語</button><button data-d="type" class="${opt.dir === "type" ? "on" : ""}">✏️ 書き取り</button><button data-d="cloze" class="${opt.dir === "cloze" ? "on" : ""}">🧩 穴埋め（AI）</button></div>
+      <div class="seg" id="optDir"><button data-d="en" class="${opt.dir === "en" ? "on" : ""}">英語 → 意味</button><button data-d="ja" class="${opt.dir === "ja" ? "on" : ""}">意味 → 英語</button><button data-d="type" class="${opt.dir === "type" ? "on" : ""}">✏️ 書き取り</button><button data-d="excloze" class="${opt.dir === "excloze" ? "on" : ""}">📝 例文の穴埋め</button><button data-d="cloze" class="${opt.dir === "cloze" ? "on" : ""}">🧩 穴埋め（AI）</button>${canListen() ? `<button data-d="speak" class="${opt.dir === "speak" ? "on" : ""}">🎤 発音</button>` : ""}</div>
     </div>
     ${opt.dir === "cloze" ? `<p class="hint">AI が、苦手な単語を使った英文の穴埋め問題を作ります（最大10問・ログインが必要）。</p>` : ""}
+    ${opt.dir === "excloze" ? `<p class="hint">人が作った本物の例文（Tatoeba）で穴埋め問題を出します。AI は使いません。例文がない単語は出ません。</p>` : ""}
+    ${opt.dir === "speak" ? `<p class="hint">出てきた単語を声に出して読みます。正しく聞き取れたら正解です（マイクを使います）。</p>` : ""}
     <button class="btn pri big" style="max-width:280px" id="tGo">スタート</button>
     <p class="hint" style="margin-top:16px">これまで：${S.test.total}問 ・ 正答率 ${S.test.total ? Math.round(S.test.correct / S.test.total * 100) : 0}% ・ ベスト ${S.test.best}点</p>
     ${p.ok ? "" : `<p class="hint">専属エージェントの解放まで：あと ${Math.max(0, UNLOCK.answers - p.answers)}問・${Math.max(0, UNLOCK.words - p.tested)}語</p>`}
@@ -56,9 +61,54 @@ function pickQuestions(pool, n) {
 
 async function start(pool) {
   if (opt.dir === "cloze") { await startCloze(pool); return; }
+  if (opt.dir === "excloze") { await startExCloze(pool); return; }
   T = { pool, qs: pickQuestions(pool, opt.n), i: 0, score: 0, combo: 0, maxCombo: 0, correct: 0, wrong: [], dir: opt.dir, timer: 0, t0: 0, answered: false };
   tone("click");
   showQ();
+}
+
+// ---- 例文の穴埋め（Tatoeba の例文を使う。AI なし） ----
+async function startExCloze(pool) {
+  const picks = pickQuestions(pool.filter((x) => /^[a-z][a-z' -]*$/i.test(x.w)), Math.min(opt.n, 20));
+  $("#testBody").innerHTML = `<div class="card t-start"><p class="kicker">EXAMPLES</p><h3><span class="spinner"></span> 例文を集めています…</h3></div>`;
+  const uniq = [...new Map(picks.map((x) => [x.w.toLowerCase(), x])).values()];
+  const found = await Promise.all(uniq.map(async (x) => ({ x, ex: await examplesOf(x.w) })));
+  if (!document.querySelector("#s-test.active")) return;
+  const qs = [];
+  for (const { x, ex } of found) {
+    if (!ex.length) continue;
+    const e = ex[Math.floor(Math.random() * Math.min(ex.length, 5))];
+    const re = new RegExp(`(^|[^a-z])(${x.w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})(?=[^a-z]|$)`, "i");
+    const m = e.en.match(re); if (!m) continue;
+    qs.push({ ...x, sentence: e.en.replace(re, `$1___`), ja: e.ja, answer: m[2] });
+  }
+  if (qs.length < 2) { toast("例文が見つかった単語が少なかったので、ほかの形式で試してください", 3500); renderStart(); return; }
+  T = { pool, qs, i: 0, score: 0, combo: 0, maxCombo: 0, correct: 0, wrong: [], dir: "cloze", timer: 0, t0: 0, answered: false };
+  tone("click");
+  showQ();
+}
+
+// ---- 発音テスト（声に出して読む。AI なし） ----
+function showSpeak(q) {
+  T.answered = false; T.right = q.w; T.t0 = performance.now();
+  $("#testBody").innerHTML = `<div class="card">
+    <div class="q-head"><span>Q${T.i + 1} / ${T.qs.length}</span><span>${T.combo >= 2 ? `🔥 ${T.combo}連続` : ""}</span><span>${T.score}点</span></div>
+    <div class="q-word">${esc(q.w)}</div><p class="cloze-ja">${esc(q.m)}</p>
+    <div class="q-time"><i id="qTime"></i></div>
+    <div style="text-align:center"><button class="btn pri big" style="max-width:280px" id="spGo">🎤 押して読む</button>
+      <p class="type-res" id="tRes"></p>
+      <button class="btn sm ghost" id="spHear">🔊 お手本を聞く</button> <button class="btn sm ghost" id="spSkip">わからない</button></div>
+  </div>`;
+  $("#spHear").onclick = () => speak(q.w);
+  $("#spSkip").onclick = () => answer(null, "");
+  $("#spGo").onclick = async () => {
+    const b = $("#spGo"); b.disabled = true; b.innerHTML = `🎤 聞いています… <span class="spinner"></span>`;
+    const r = await listen(q.w);
+    if (!T || T.answered) return;
+    if (r.ok) { answer(null, q.w, r.heard); return; }
+    b.disabled = false; b.textContent = "🎤 もう一度";
+    $("#tRes").innerHTML = r.error === "not-allowed" ? "マイクが使えません（ブラウザの設定で許可してください）" : r.heard ? `${r.near ? "△ おしい！" : "✕"} 「${esc(r.heard)}」と聞こえました` : "聞き取れませんでした";
+  };
 }
 
 // ---- 穴埋め（AI が英文を作る） ----
@@ -110,7 +160,7 @@ function editOps(a, b) {
 
 // 書き取りの答え合わせ用（大文字小文字・空白・記号の違いは無視）
 const norm = (s) => String(s || "").toLowerCase().replace(/[’']/g, "'").replace(/[^a-z0-9' -]/g, "").replace(/\s+/g, " ").trim();
-const qTime = () => (T.dir === "type" ? TYPE_TIME : T.dir === "cloze" ? CLOZE_TIME : Q_TIME);
+const qTime = () => (T.dir === "type" ? TYPE_TIME : T.dir === "cloze" ? CLOZE_TIME : T.dir === "speak" ? 30 : Q_TIME);
 
 function showTyping(q) {
   T.answered = false; T.right = q.w; T.t0 = performance.now();
@@ -134,6 +184,7 @@ function showQ() {
   const q = T.qs[T.i];
   if (T.dir === "type") { showTyping(q); startTimer(); return; }
   if (T.dir === "cloze") { showCloze(q); startTimer(); return; }
+  if (T.dir === "speak") { showSpeak(q); startTimer(); return; }
   const key = T.dir === "en" ? "m" : "w";
   const right = q[key];
   const others = shuffle(T.pool.filter((x) => x[key] && x[key] !== right && x.w !== q.w)).slice(0, 3).map((x) => x[key]);
@@ -156,28 +207,29 @@ function startTimer() {
   T.timer = setInterval(() => {
     const left = qTime() - (performance.now() - T.t0) / 1000;
     const bar = $("#qTime"); if (bar) bar.style.width = `${Math.max(0, left / qTime()) * 100}%`;
-    if (left <= 0) answer(null, T.dir === "type" ? ($("#tIn") || {}).value || "" : undefined);
+    if (left <= 0) answer(null, T.dir === "type" ? ($("#tIn") || {}).value || "" : T.dir === "speak" ? "" : undefined);
   }, 100);
 }
 
 document.addEventListener("keydown", (e) => {
-  if (!T || !document.querySelector("#s-test.active") || T.dir === "type") return;
+  if (!T || !document.querySelector("#s-test.active") || T.dir === "type" || T.dir === "speak") return;
   const n = parseInt(e.key, 10);
   if (n >= 1 && n <= 4) { const b = $$(".choice")[n - 1]; if (b) answer(b); }
 });
 
-function answer(btn, typed) {
+function answer(btn, typed, heard) {
   if (!T || T.answered) return;
-  T.answered = true; clearInterval(T.timer);
+  T.answered = true; clearInterval(T.timer); stopListen();
   const q = T.qs[T.i];
   const ok = typed !== undefined ? !!typed && norm(typed) === norm(q.w) : !!btn && btn.dataset.c === T.right;
   const left = Math.max(0, qTime() - (performance.now() - T.t0) / 1000);
   $$(".choice").forEach((b) => { if (b.dataset.c === T.right) b.classList.add("ok"); });
   if (typed !== undefined) {
     const inp = $("#tIn"); if (inp) { inp.disabled = true; inp.classList.add(ok ? "ok" : "ng"); }
+    const sg = $("#spGo"); if (sg) sg.disabled = true;
     const e = !ok && typed ? editOps(norm(typed), norm(q.w)) : null;
     const L = norm(q.w).length, near = e && e.dist <= (L <= 4 ? 1 : L <= 9 ? 2 : 3) && e.dist < L / 2;   // 長い語ほど、少しの打ちまちがいを許す
-    $("#tRes").innerHTML = ok ? "⭕ 正解！"
+    $("#tRes").innerHTML = ok ? (heard ? `⭕ ばっちり！ 「${esc(heard)}」と聞こえました` : "⭕ 正解！")
       : near ? `🤏 おしい！ あと少し<br><span class="spell">${e.ops.map((o) => `<span class="${o.ok ? "" : o.miss ? "miss" : "bad"}">${esc(o.c === " " ? "␣" : o.c)}</span>`).join("")}</span><br><small class="note">赤い文字がちがうところです</small>`
       : `❌ 正解は <b>${esc(q.w)}</b>`;
     speak(q.w);
@@ -212,7 +264,7 @@ function pop(text) {
 
 function finish() {
   const best = T.score > S.test.best;
-  S.test.rounds++; if (best) S.test.best = T.score;
+  S.test.rounds++; if (best) { S.test.best = T.score; notify("best", `テストのベスト記録を更新しました 🏅（${T.score}点）`); }
   save(true);
   const rate = Math.round((T.correct / T.qs.length) * 100);
   const uniqWrong = [...new Map(T.wrong.map((x) => [x.w, x])).values()];

@@ -505,3 +505,41 @@ body.offline .topbar .brand::after{content:"オフライン";margin-left:8px;fon
 
 /* v1.10.0 読み上げ */
 .vipa{font:500 calc(18px * var(--fscale)) "Segoe UI","Lucida Sans Unicode","Arial Unicode MS",sans-serif;color:var(--sub);margin-top:4px;min-height:1.3em;letter-spacing:.02em}
+
+/* v1.12.0 外部 API */
+.vtools{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:14px}
+.vtools .btn{background:color-mix(in srgb,var(--paper) 85%,transparent)}
+.vextra{margin-top:12px;max-width:560px;width:100%;text-align:left;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:14px;cursor:auto;max-height:34vh;overflow:auto}
+.vextra p{margin:6px 0}
+.vextra .pos{font:600 11px var(--mono);color:var(--accent);text-transform:uppercase;margin-right:4px}
+.mic-ok{color:#2f8f5e;font-weight:700}
+.mic-ng{color:var(--warn);font-weight:600}
+.quote{border-left:4px solid var(--accent-soft)}
+.quote blockquote{margin:6px 0;font-family:var(--serif);font-size:16px;line-height:1.6}
+.quote .qa{color:var(--sub);font-size:13px}
+.rank-list{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.rank-list li{display:grid;grid-template-columns:40px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-radius:10px}
+.rank-list li:nth-child(odd){background:var(--bg)}
+.rank-list li.me{outline:2px solid var(--accent)}
+.rank-list .rk{font:700 15px var(--mono);text-align:center}
+.rank-list .rk.r1{color:#d4a017}.rank-list .rk.r2{color:#9aa3ad}.rank-list .rk.r3{color:#b87333}
+.rank-list b{font-family:var(--serif);font-size:16px}
+.rank-me{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--accent-soft);border-radius:12px;margin-bottom:10px}
+
+/* ダーク（画面の明るさ） */
+.mode-btn{padding:4px 9px;font-size:14px}
+html[data-mode="dark"]{color-scheme:dark}
+html[data-mode="dark"] .choice.ok{background:#1d3a2b;border-color:#3fa36d}
+html[data-mode="dark"] .choice.ng{background:#3d2320}
+html[data-mode="dark"] .type-row input.ok{background:#1d3a2b;border-color:#3fa36d}
+html[data-mode="dark"] .type-row input.ng{background:#3d2320}
+html[data-mode="dark"] .idle{background:rgba(22,25,26,.85)}
+html[data-mode="dark"] .badge.pw{background:#3a3020;color:#e3c27a}
+html[data-mode="dark"] .badge.url{background:#2b2742;color:#b9aaf0}
+html[data-mode="dark"] .mic-ok{color:#5fd39a}
+html[data-mode="dark"] .memo-stage{background:#0f1112}
+html[data-mode="dark"] .modal{background:rgba(0,0,0,.55)}
+html[data-mode="dark"] .toast{background:#e8ebe9;color:#16191a}
+html[data-mode="dark"] .update-bar{background:#e8ebe9;color:#16191a}
+html[data-mode="dark"] .update-bar .btn.ghost{color:#444}
+html[data-mode="dark"] .spell .miss{background:rgba(220,90,70,.25)}

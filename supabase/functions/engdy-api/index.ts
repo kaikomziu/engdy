@@ -210,6 +210,40 @@ async function sendReports(cfg: Config, freqs: Freq[], accountId: string | null 
   return { sent, failed };
 }
 
+// ---- 外部の無料 API ----
+// Datamuse：類義語・反意語（よく使う語だけ。f は100万語あたりの出現数）
+async function datamuse(word: string): Promise<{ base: string; word: string; meaning: string; type: string }[]> {
+  const q = encodeURIComponent(word.toLowerCase());
+  const get = async (rel: string, n: number, type: string) => {
+    try {
+      const r = await (await fetch(`https://api.datamuse.com/words?${rel}=${q}&md=f&max=20`)).json();
+      return (r as { word: string; tags?: string[] }[])
+        .map((x) => ({ w: x.word, f: Number(((x.tags || []).find((t) => t.startsWith("f:")) || "f:0").slice(2)) }))
+        .filter((x) => /^[a-z]+(?:[ -][a-z]+)?$/.test(x.w) && x.f >= 4)
+        .sort((a, b) => b.f - a.f).slice(0, n)
+        .map((x) => ({ base: word, word: x.w, meaning: "", type }));
+    } catch (_e) { return []; }
+  };
+  const [syn, ant] = await Promise.all([get("rel_syn", 2, "類義語"), get("rel_ant", 1, "反意語")]);
+  return [...syn, ...ant];
+}
+// Tatoeba：その単語をそのままの形で含む、短い英文と和訳
+async function tatoeba(word: string) {
+  try {
+    const r = await (await fetch(`https://api.tatoeba.org/unstable/sentences?lang=eng&q=${encodeURIComponent(word)}&trans:lang=jpn&sort=relevance&limit=30`)).json();
+    const re = new RegExp(`(^|[^a-z])${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z]|$)`, "i");
+    const out: { en: string; ja: string }[] = [];
+    for (const s of (r?.data || []) as { text: string; translations?: { text: string; lang: string; is_direct?: boolean }[] }[]) {
+      if (!s.text || s.text.length > 90 || !re.test(s.text)) continue;
+      const tr = (s.translations || []).filter((t) => t.lang === "jpn").sort((a, b) => Number(!!b.is_direct) - Number(!!a.is_direct))[0];
+      if (!tr) continue;
+      out.push({ en: clip(s.text, 120), ja: clip(tr.text, 120) });
+      if (out.length >= 8) break;
+    }
+    return out;
+  } catch (_e) { return []; }
+}
+
 // ---- AI の結果の使い回し（利用者みんなで共有） ----
 const ck = (w: unknown) => String(w ?? "").trim().toLowerCase();
 async function cacheGet(kind: string, keys: string[]): Promise<Record<string, unknown>> {
@@ -274,6 +308,32 @@ Deno.serve(async (req) => {
       return json({ ok: true, ...(await sendReports(cfg, dueFreqs())) });
     }
 
+    // ---- 例文（Tatoeba：人が作った英文と和訳。AI は使わない） ----
+    if (action === "examples") {
+      const w = ck(body.word);
+      if (!/^[a-z][a-z' -]{0,40}$/.test(w)) return json({ ok: false, reason: "empty" });
+      const hit = await cacheGet("tatoeba", [w]);
+      if (hit[w]) return json({ ok: true, items: hit[w], cached: true });
+      const items = await tatoeba(w);
+      await cachePut("tatoeba", { [w]: items });
+      return json({ ok: true, items });
+    }
+
+    // ---- 今日の名言（ZenQuotes。和訳は1日1回だけ AI に頼んで、みんなで使い回す） ----
+    if (action === "quote") {
+      const day = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+      const hit = await cacheGet("quote", [day]);
+      if (hit[day]) return json({ ok: true, ...(hit[day] as object), cached: true });
+      let q = { q: "", a: "" };
+      try { const z = await (await fetch("https://zenquotes.io/api/today")).json(); q = { q: clip(z?.[0]?.q, 400), a: clip(z?.[0]?.a, 80) }; } catch (_e) { /* 取れなかったら空 */ }
+      if (!q.q) return json({ ok: false, reason: "quote" });
+      let ja = "";
+      try { ja = clip((await gemini(cfg, "英語の名言を、中高生にも分かる自然な日本語に訳してください。訳文だけを返す。", [{ role: "user", text: q.q }])).trim(), 400); } catch (_e) { /* 訳せなくても英語だけ出す */ }
+      const res = { ...q, ja, day };
+      await cachePut("quote", { [day]: res });
+      return json({ ok: true, ...res });
+    }
+
     const acc = await account(body.ka_token);
     if (!acc) return json({ ok: false, reason: "auth" }, 401);
     accForRefund = acc;
@@ -291,6 +351,43 @@ Deno.serve(async (req) => {
         await sb.rpc("engdy_internal_mark", { p_account: acc.id, p_ok: false, p_info: "verify: " + String((e as Error).message) });
         throw e;
       }
+      return json({ ok: true });
+    }
+
+    // ---- ネイティブの読み上げ（Google Cloud の音声合成。いちど作った音声はみんなで使い回す） ----
+    if (action === "tts") {
+      const text = clip(body.text, 300).trim(); const accent = body.accent === "uk" ? "uk" : "us";
+      if (!text) return json({ ok: false, reason: "empty" });
+      const key = `${accent}|${text.toLowerCase()}`;
+      const hit = await cacheGet("tts", [key]);
+      if (hit[key]) return json({ ok: true, audio: hit[key], cached: true });
+      const gk = cfg.secrets.gcloud_tts_key;
+      if (!gk) return json({ ok: false, reason: "no_tts_key" });
+      if (!acc.is_admin) {
+        const limit = Math.max(1, parseInt(cfg.settings.tts_daily_limit || "200", 10) || 200);
+        const { data: okUse } = await sb.rpc("engdy_internal_tts_use", { p_account: acc.id, p_limit: limit });
+        if (okUse !== true) return json({ ok: false, reason: "limit" });
+      }
+      const voice = accent === "uk" ? { languageCode: "en-GB", name: "en-GB-Neural2-A" } : { languageCode: "en-US", name: "en-US-Neural2-F" };
+      const res = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${encodeURIComponent(gk)}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: { text }, voice, audioConfig: { audioEncoding: "MP3", speakingRate: 1.0 } }),
+      });
+      if (!res.ok) return json({ ok: false, reason: "tts_" + res.status });
+      const audio = (await res.json()).audioContent as string;
+      if (!audio) return json({ ok: false, reason: "tts_empty" });
+      await cachePut("tts", { [key]: audio });
+      return json({ ok: true, audio });
+    }
+
+    // ---- Discord に報告（Webhook） ----
+    if (action === "discord") {
+      const url = String(body.url || "").trim();
+      if (!/^https:\/\/(discord|discordapp)\.com\/api\/webhooks\/\d+\/[\w-]+$/.test(url)) return json({ ok: false, reason: "webhook" });
+      const content = clip(body.content, 1800).trim();
+      if (!content) return json({ ok: false, reason: "empty" });
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: "Engdy", content, allowed_mentions: { parse: [] } }) });
+      if (!res.ok) return json({ ok: false, reason: "webhook_" + res.status });
       return json({ ok: true });
     }
 
@@ -337,7 +434,7 @@ Deno.serve(async (req) => {
       } catch (_e) { return json({ ok: false, reason: "parse" }); }
     }
 
-    // ---- 似た単語・反対語・派生語（単語ごとに使い回す） ----
+    // ---- 似た単語・反対語（まず Datamuse で探し、意味は保存済み→AI の順。見つからない単語だけ AI に頼む） ----
     if (action === "related") {
       const words = wordsOf(body.words, 40);
       if (!words.length) return json({ ok: false, reason: "empty" });
@@ -345,20 +442,43 @@ Deno.serve(async (req) => {
       const hit = await cacheGet("related", words.map(ck));
       const need = words.filter((w) => !hit[ck(w)]);
       let items: Rel[] = words.filter((w) => hit[ck(w)]).flatMap((w) => hit[ck(w)] as Rel[]);
+      let usedAi = false;
       if (need.length) {
-        if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
-        const out = await gemini(cfg, `与えられた英単語それぞれについて、覚えておくと役に立つ「類義語」「反意語」「派生語」を、ある場合だけ合わせて1〜3個あげ、日本語の意味を付けてください。中高生がよく使うものを優先。
-必ず JSON だけを返す: {"items":[{"base":"元の単語","word":"関連する単語","meaning":"意味","type":"類義語|反意語|派生語"}]}`, [{ role: "user", text: JSON.stringify(need) }], true);
-        let got: Rel[] = [];
-        try { got = (parseJson(out).items || []).slice(0, 120).map((i: Record<string, unknown>) => ({ base: clip(i.base, 60), word: clip(i.word, 60), meaning: clip(i.meaning, 80), type: clip(i.type, 6) })); }
-        catch (_e) { return json({ ok: false, reason: "parse" }); }
-        const put: Record<string, Rel[]> = {};
-        for (const w of need) put[ck(w)] = got.filter((g) => ck(g.base) === ck(w));
-        await cachePut("related", put);
-        items = items.concat(got);
+        // 1) Datamuse
+        const found: Record<string, Rel[]> = {};
+        await Promise.all(need.map(async (w) => { found[ck(w)] = await datamuse(w); }));
+        // 2) 意味：保存済み → なければまとめて AI に1回
+        const cands = [...new Set(Object.values(found).flat().map((r) => ck(r.word)))];
+        const mh = await cacheGet("meaning", cands);
+        const noMean = cands.filter((c) => !mh[c]);
+        if (noMean.length) {
+          if (!(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
+          usedAi = true;
+          try {
+            const got = parseJson(await gemini(cfg, SYS_MEANING, [{ role: "user", text: JSON.stringify(noMean) }], true)).items || [];
+            const put: Record<string, string> = {};
+            for (const i of got) if (i.word && i.meaning) { put[ck(i.word)] = clip(i.meaning, 80); mh[ck(i.word)] = put[ck(i.word)]; }
+            await cachePut("meaning", put);
+          } catch (_e) { /* 意味がなくても候補は出す */ }
+        }
+        for (const k of Object.keys(found)) found[k] = found[k].map((r) => ({ ...r, meaning: String(mh[ck(r.word)] || "") })).filter((r) => r.meaning);
+        // 3) Datamuse で見つからなかった単語だけ、AI に頼む
+        const rest = need.filter((w) => !found[ck(w)] || !found[ck(w)].length);
+        if (rest.length) {
+          if (!usedAi && !(await useAi(cfg, acc))) return json({ ok: false, reason: "limit" });
+          usedAi = true;
+          try {
+            const got: Rel[] = (parseJson(await gemini(cfg, `与えられた英単語それぞれについて、覚えておくと役に立つ「類義語」「反意語」「派生語」を、ある場合だけ合わせて1〜3個あげ、日本語の意味を付けてください。中高生がよく使うものを優先。
+必ず JSON だけを返す: {"items":[{"base":"元の単語","word":"関連する単語","meaning":"意味","type":"類義語|反意語|派生語"}]}`, [{ role: "user", text: JSON.stringify(rest) }], true)).items || [])
+              .slice(0, 80).map((i: Record<string, unknown>) => ({ base: clip(i.base, 60), word: clip(i.word, 60), meaning: clip(i.meaning, 80), type: clip(i.type, 6) }));
+            for (const w of rest) found[ck(w)] = got.filter((g) => ck(g.base) === ck(w));
+          } catch (_e) { /* 失敗した単語は空 */ }
+        }
+        await cachePut("related", found);
+        items = items.concat(Object.values(found).flat());
       }
-      await aiStat(need.length ? 0 : 1, need.length ? 1 : 0);
-      return json({ ok: true, items, cached: words.length - need.length, ai: need.length > 0 });
+      await aiStat(usedAi ? 0 : 1, usedAi ? 1 : 0);
+      return json({ ok: true, items, cached: words.length - need.length, ai: usedAi });
     }
 
     // ---- 穴埋め問題（単語ごとに英文をためておき、3つ以上たまった単語は AI を呼ばずにそこから出す） ----
