@@ -1,9 +1,9 @@
 // Engdy のサービスワーカー：ホーム画面に追加したときと、オフラインで閲覧するため
 // 更新したら VERSION を上げる（古いキャッシュを消して入れ直す）
-const VERSION = "engdy-1.6.1";
+const VERSION = "engdy-1.7.0";
 const SHELL = [
-  "./", "./index.html", "./css/style.css?v=1.6.1", "./icon.svg", "./manifest.webmanifest",
-  ...["agent", "api", "app", "audio", "changelog", "crypto", "gacha", "items", "lists", "router", "stats", "store", "test", "util", "view", "memo", "sample"].map((m) => `./js/${m}.js?v=1.6.1`),
+  "./", "./index.html", "./css/style.css?v=1.7.0", "./icon.svg", "./manifest.webmanifest",
+  ...["agent", "api", "app", "audio", "changelog", "crypto", "gacha", "items", "lists", "router", "stats", "store", "test", "util", "view", "memo", "sample"].map((m) => `./js/${m}.js?v=1.7.0`),
   "./icons/icon-192.png",
   "./assets/sfx/pop.mp3", "./assets/sfx/tick.mp3",
 ];

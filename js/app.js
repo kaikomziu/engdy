@@ -2,8 +2,8 @@
 import { $, $$, esc, dayKey, fmtDuration, toast, modal, confirmBox, sleep } from "./util.js";
 import { S, save, onSave, today, agentProgress } from "./store.js";
 import { rpc, fn, token, me, reasonText } from "./api.js";
-import { go, onEnter } from "./router.js";
-import { tone, setBgmVolume, bgm } from "./audio.js";
+import { go, onEnter, onLeave } from "./router.js";
+import { tone, bgm, refreshBgm, TRACKS, SCENES, sceneTrack, SFX_CATS, testSfx, previewTrack, stopPreview, previewing } from "./audio.js";
 import { applySkin } from "./gacha.js";
 import { openShared, addSample, startLast, lastListName } from "./lists.js";
 import { loadLists, testPool } from "./store.js";
@@ -14,7 +14,7 @@ import "./agent.js";
 import { CHANGELOG } from "./changelog.js";
 import "./memo.js";
 
-export const VERSION = "1.6.1";
+export const VERSION = "1.7.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -243,10 +243,22 @@ onEnter("settings", () => {
     <div class="set-row"><label>意味が出るまで<small>閲覧で、単語が出てから意味を表示するまでの秒数</small></label><span><input type="range" min="1" max="10" step="0.5" id="setShow" value="${st.showDelay}"> <b id="setShowV">${st.showDelay}秒</b></span></div>
     <div class="set-row"><label>次の単語まで<small>意味が出てから次へ進むまでの秒数</small></label><span><input type="range" min="1" max="10" step="0.5" id="setNext" value="${st.nextDelay}"> <b id="setNextV">${st.nextDelay}秒</b></span></div>
     <div class="set-row"><label>発音を自動で読み上げ<small>単語が出たときに英語の音声を流す</small></label><input type="checkbox" id="setSpeak" ${st.autoSpeak ? "checked" : ""}></div>
-    <div class="set-row"><label>BGM の音量</label><input type="range" min="0" max="1" step="0.05" id="setBgm" value="${st.bgm}"></div>
-    <div class="set-row"><label>効果音の音量</label><input type="range" min="0" max="1" step="0.05" id="setSfx" value="${st.sfx}"></div>
     <div class="set-row"><label>振動<small>正解・不正解・スタンプのときに、スマホを軽くふるわせる（Android など対応機種のみ）</small></label><input type="checkbox" id="setVib" ${st.vibrate !== false ? "checked" : ""}></div>
     <div class="set-row"><label>文字の大きさ<small>閲覧とテストの単語・意味の大きさ</small></label><div class="seg" id="setFs">${[["s", "小"], ["m", "中"], ["l", "大"]].map(([v, t]) => `<button data-fs="${v}" class="${(st.fontSize || "m") === v ? "on" : ""}">${t}</button>`).join("")}</div></div>
+  </div>
+  <div class="card"><h3 class="sec">🎵 BGM</h3>
+    <div class="set-row"><label>BGM を流す</label><input type="checkbox" id="setBgmOn" ${st.bgmOn !== false ? "checked" : ""}></div>
+    <div class="set-row"><label>音量 <small id="setBgmV">${Math.round(st.bgm * 100)}%</small></label><input type="range" min="0" max="1" step="0.05" id="setBgm" value="${st.bgm}"></div>
+    <p class="hint" style="margin-top:10px">場面ごとに流す曲を選べます。▶ で試聴（約15秒）。</p>
+    ${SCENES.map(([sc, label]) => `<div class="set-row scene-row"><label>${label}</label><span class="row"><select data-scene="${sc}">
+      <option value="none">なし</option>${TRACKS.map((t) => `<option value="${t.id}" ${sceneTrack(sc) === t.id ? "selected" : ""}>${esc(t.title)}</option>`).join("")}
+      </select><button class="btn sm" data-prev="${sc}" title="試聴">▶</button></span></div>`).join("")}
+    <p class="hint">曲：${[...new Set(TRACKS.map((t) => t.by))].map(esc).join("・")}</p>
+  </div>
+  <div class="card"><h3 class="sec">🔊 効果音</h3>
+    <div class="set-row"><label>効果音を鳴らす</label><input type="checkbox" id="setSfxOn" ${st.sfxOn !== false ? "checked" : ""}></div>
+    <div class="set-row"><label>音量 <small id="setSfxV">${Math.round(st.sfx * 100)}%</small></label><input type="range" min="0" max="1" step="0.05" id="setSfx" value="${st.sfx}"></div>
+    ${SFX_CATS.map(([c, label, desc]) => `<div class="set-row"><label>${label}<small>${desc}</small></label><span class="row"><button class="btn sm" data-test="${c}" title="試しに鳴らす">▶</button><input type="checkbox" data-cat="${c}" ${!(st.sfxCats && st.sfxCats[c] === false) ? "checked" : ""}></span></div>`).join("")}
   </div>
   <div class="card"><h3 class="sec">🎯 今日の目標</h3>
     <div class="set-row"><label>学習時間<small>0 にすると目標にしない</small></label><span><input type="number" min="0" max="300" id="setGoalMin" value="${st.goalMin}" style="width:80px"> 分</span></div>
@@ -268,8 +280,29 @@ onEnter("settings", () => {
   bind("#setShow", "showDelay", "#setShowV");
   bind("#setNext", "nextDelay", "#setNextV");
   bind("#setSpeak", "autoSpeak");
-  bind("#setBgm", "bgm", null, (v) => setBgmVolume(v));
-  bind("#setSfx", "sfx", null, () => tone("click"));
+  // BGM
+  $("#setBgmOn").onchange = (e) => { st.bgmOn = e.target.checked; save(); refreshBgm(); };
+  $("#setBgm").oninput = (e) => { st.bgm = parseFloat(e.target.value); $("#setBgmV").textContent = Math.round(st.bgm * 100) + "%"; save(); refreshBgm(); };
+  $$("[data-scene]").forEach((sel) => (sel.onchange = () => {
+    st.bgmTracks = { ...(st.bgmTracks || {}), [sel.dataset.scene]: sel.value }; save(); refreshBgm();
+  }));
+  const prevBtns = () => $$("[data-prev]").forEach((b) => (b.textContent = previewing() && previewing() === sceneTrack(b.dataset.prev) && b.classList.contains("on") ? "■" : "▶"));
+  $$("[data-prev]").forEach((b) => (b.onclick = () => {
+    const on = b.classList.contains("on");
+    $$("[data-prev]").forEach((x) => x.classList.remove("on"));
+    if (on) { stopPreview(); prevBtns(); return; }
+    const id = sceneTrack(b.dataset.prev);
+    if (id === "none") { toast("「なし」になっています"); return; }
+    b.classList.add("on");
+    previewTrack(id, () => { b.classList.remove("on"); prevBtns(); });
+    prevBtns();
+  }));
+  // 効果音
+  $("#setSfxOn").onchange = (e) => { st.sfxOn = e.target.checked; save(); if (st.sfxOn) tone("click"); };
+  $("#setSfx").oninput = (e) => { st.sfx = parseFloat(e.target.value); $("#setSfxV").textContent = Math.round(st.sfx * 100) + "%"; save(); };
+  $("#setSfx").onchange = () => tone("click", true);
+  $$("[data-cat]").forEach((c) => (c.onchange = () => { st.sfxCats = { ...(st.sfxCats || {}), [c.dataset.cat]: c.checked }; save(); }));
+  $$("[data-test]").forEach((b) => (b.onclick = () => testSfx(b.dataset.test)));
   bind("#setVib", "vibrate", null, (v) => { if (v) tone("ok"); });
   $("#setFs").onclick = (e) => {
     const b = e.target.closest("[data-fs]"); if (!b) return;
@@ -294,6 +327,8 @@ onEnter("settings", () => {
     location.reload();
   };
 });
+
+onLeave("settings", () => stopPreview());
 
 // ================= 更新履歴 =================
 onEnter("changelog", () => {
