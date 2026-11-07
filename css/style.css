@@ -462,3 +462,10 @@ button:focus:not(:focus-visible){outline:none}
 /* v1.7.0 音の設定 */
 .scene-row select{max-width:180px;padding:6px 8px;font-size:14px}
 [data-prev].on{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* v1.8.0 PWA */
+.next.install{border-left-color:var(--accent)}
+.update-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:max(16px,env(safe-area-inset-bottom));z-index:150;display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:8px 10px 8px 16px;border-radius:999px;box-shadow:var(--shadow);font-size:14px;animation:fadeUp .3s;max-width:94vw}
+.update-bar .btn.ghost{color:#ddd}
+body.offline .topbar .brand::after{content:"オフライン";margin-left:8px;font:600 10px var(--mono);letter-spacing:.1em;color:#fff;background:var(--warn);padding:2px 8px;border-radius:999px;vertical-align:middle}
+@media (max-width:760px){body:not([data-screen="login"]):not([data-screen="view"]):not([data-screen="test"]):not([data-screen="memo"]) .update-bar{bottom:calc(76px + env(safe-area-inset-bottom))}}
+@media (display-mode: standalone){.topbar,.pagebar{padding-top:max(12px,env(safe-area-inset-top))}}

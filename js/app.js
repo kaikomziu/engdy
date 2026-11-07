@@ -13,8 +13,9 @@ import "./stats.js";
 import "./agent.js";
 import { CHANGELOG } from "./changelog.js";
 import "./memo.js";
+import { initPwa, install, canInstall, isStandalone, isIOS, onPwaChange, cacheMusic, musicCached, clearMusic, musicTotal } from "./pwa.js";
 
-export const VERSION = "1.7.0";
+export const VERSION = "1.8.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -60,6 +61,7 @@ function renderMain(arg) {
     ${goalHtml(t)}`;
   renderResume();
   renderNext();
+  renderInstall();
   renderStamp(arg && arg.newStamp);
   updateDia();
   const p = agentProgress();
@@ -109,6 +111,18 @@ function renderNext() {
   el.hidden = false; el.innerHTML = html;
   const s = $("#nxSample"); if (s) s.onclick = () => { addSample(); toast("サンプルの単語リスト（150語）を入れました"); renderNext(); };
   const l = $("#nxLast"); if (l) l.onclick = () => { if (!startLast()) go("browse"); };
+}
+
+// ================= アプリとしてインストール（おすすめ表示） =================
+function renderInstall() {
+  const el = $("#installCard");
+  const show = !isStandalone() && !S.installHide && (canInstall() || isIOS()) && S.stats.laps >= 1;
+  el.hidden = !show;
+  if (!show) return;
+  el.innerHTML = `<div><p class="kicker">APP</p><b>📲 Engdy をアプリとして使おう</b><p class="note">ホーム画面のアイコンからすぐ開けて、オフラインでも閲覧できます。</p></div>
+    <div class="row"><button class="btn sm ghost" id="insHide">今はしない</button><button class="btn pri" id="insGo">インストール</button></div>`;
+  $("#insGo").onclick = install;
+  $("#insHide").onclick = () => { S.installHide = true; save(); el.hidden = true; toast("設定の「アプリ」から、いつでもインストールできます"); };
 }
 
 // ================= はじめての人へ =================
@@ -206,11 +220,12 @@ $("#s-login").addEventListener("click", (e) => {
   KaAccount.login(b.dataset.act === "register" ? "register" : "login");
 });
 
-let pendingShared = null;
+let pendingShared = null, pendingGo = null;
 function enterApp() {
   // はじめての人には、サンプルの単語リストを入れておく
   if (!S.sampleAdded) { if (!loadLists().length) addSample(); S.sampleAdded = true; save(); }
   go("main");
+  if (pendingGo) { const g = pendingGo; pendingGo = null; go(g); return; }
   if (!pendingShared) setTimeout(welcome, 400);
   if (pendingShared) { const c = pendingShared; pendingShared = null; openShared(c); }
 }
@@ -269,6 +284,7 @@ onEnter("settings", () => {
     <div class="set-row"><label>時刻</label><input type="time" id="setNotifyTime" value="${st.notifyTime || "19:00"}"></div>
     <p class="hint">※ 通知は Engdy を開いている間（ほかのタブを見ていても OK）だけ届きます。スマホでは「ホーム画面に追加」して開いておくと確実です。</p>
   </div>
+  <div class="card" id="appCard"></div>
   <div class="card"><h3 class="sec">データ</h3>
     <p class="hint">${me() ? "ログイン中なので、記録はかるわかGAMES のクラウドに自動で保存されます。" : "ゲストの記録はこのブラウザだけに保存されます。アカウントでログインすると、ほかの端末でも続きができます。"}</p>
     <button class="btn danger ghost" id="resetAll">この端末の記録をすべて消す</button></div>`;
@@ -321,6 +337,7 @@ onEnter("settings", () => {
     } else st.notify = false;
     save();
   };
+  renderAppCard();
   $("#resetAll").onclick = async () => {
     if (!(await confirmBox("記録をすべて消しますか？", "統計・スタンプ・ダイヤ・図鑑・単語リストがこの端末から消えます。元に戻せません。", "消す", true))) return;
     localStorage.removeItem("engdy_v1"); localStorage.removeItem("engdy_lists");
@@ -335,6 +352,28 @@ onEnter("changelog", () => {
   $("#changelogBody").innerHTML = CHANGELOG.map((c) => `<div class="card log"><div class="log-head"><b>v${esc(c.version)}</b><span class="note">${esc(c.date)}</span></div>
     <ul>${c.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></div>`).join("");
 });
+
+// ================= 設定：アプリ（PWA） =================
+async function renderAppCard() {
+  const el = $("#appCard"); if (!el) return;
+  const n = await musicCached(), total = musicTotal();
+  const st = isStandalone() ? "アプリとして開いています ✓" : canInstall() ? "このブラウザからインストールできます" : isIOS() ? "Safari の共有ボタンから「ホーム画面に追加」できます" : "ブラウザのメニューからインストールできます";
+  el.innerHTML = `<h3 class="sec">📲 アプリ</h3>
+    <div class="set-row"><label>アプリとしてインストール<small>${st}</small></label>${isStandalone() ? "" : `<button class="btn sm pri" id="appInstall">インストール</button>`}</div>
+    <div class="set-row"><label>音楽をオフライン用に保存<small id="musicState">${n >= total ? `保存済み（${total}曲）` : n ? `${n} / ${total}曲 保存済み` : "BGM（約14MB）を端末に保存して、ネットがなくても流せるようにします"}</small></label>
+      <span class="row">${n ? `<button class="btn sm ghost" id="musicClear">削除</button>` : ""}${n < total ? `<button class="btn sm" id="musicSave">保存する</button>` : ""}</span></div>
+    <p class="hint">オフラインでも、自分のリストの閲覧・テスト・自由メモ・ガチャ・統計が使えます。公開・AI・保護者メールはネットが必要です。</p>`;
+  const ib = $("#appInstall"); if (ib) ib.onclick = install;
+  const ms = $("#musicSave"); if (ms) ms.onclick = async () => {
+    ms.disabled = true;
+    const ok = await cacheMusic((done, all) => {
+      const s = $("#musicState"); if (s) s.textContent = `保存中… ${done} / ${all}曲`;
+      if (done >= all) { toast("音楽を保存しました"); renderAppCard(); }
+    });
+    if (!ok) ms.disabled = false;
+  };
+  const mc = $("#musicClear"); if (mc) mc.onclick = async () => { await clearMusic(); toast("保存した音楽を削除しました"); renderAppCard(); };
+}
 
 // ================= 保護者メール =================
 // 登録すると「仮登録」になり、そのアドレスに届く認証メールのボタンを押すと「本登録」になって、レポートが届き始める
@@ -471,8 +510,9 @@ async function renderAdmin() {
 async function boot() {
   applySkin();
   applyFontSize();
-  // ホーム画面に追加（PWA）・オフライン用
-  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+  // アプリとして使う仕組み（インストール・更新のお知らせ・オフライン）
+  initPwa();
+  onPwaChange(() => { if (document.querySelector("#s-main.active")) renderInstall(); if (document.querySelector("#s-settings.active")) renderAppCard(); });
   const q = new URLSearchParams(location.search);
   // メールの「送信停止」リンク
   if (q.get("unsub")) {
@@ -490,6 +530,8 @@ async function boot() {
       : `<h3>認証できませんでした</h3><p>${r && r.reason === "expired" ? "リンクの期限（48時間）が切れています。学習する人のアプリの「保護者メール」から、確認メールをもう一度送ってください。" : "リンクが正しくないか、すでに認証が済んでいます。"}</p>`;
     setTimeout(() => modal(`<p class="kicker">PARENT MAIL</p>${msg}<div class="row" style="justify-content:flex-end"><button class="btn pri" data-close>OK</button></div>`), 300);
   }
+  const GO_OK = ["browse", "test", "memo", "stats", "create", "gacha"];
+  if (GO_OK.includes(q.get("go"))) { pendingGo = q.get("go"); history.replaceState(null, "", location.pathname); }
   if (q.get("list")) { pendingShared = q.get("list"); history.replaceState(null, "", location.pathname); }
 
   if (window.KaAccount) {
@@ -500,7 +542,8 @@ async function boot() {
       if (document.querySelector("#s-main.active")) renderMain();
     });
   }
-  if ((window.KaAccount && KaAccount.isLoggedIn()) || localStorage.getItem("engdy_guest") === "1") enterApp();
+  const offlineSession = !window.KaAccount && !!localStorage.getItem("ka_session");   // オフラインで SDK が読めないとき
+  if ((window.KaAccount && KaAccount.isLoggedIn()) || localStorage.getItem("engdy_guest") === "1" || offlineSession) enterApp();
   else go("login");
 }
 boot();
