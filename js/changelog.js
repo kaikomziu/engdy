@@ -1,6 +1,13 @@
 // 更新履歴（新しいものを上に足す）
 export const CHANGELOG = [
   {
+    version: "1.6.1",
+    date: "2026-11-07",
+    notes: [
+      "保護者へのメールの差出人の名前を「Engdy」にした（admin 画面で変えられる）",
+    ],
+  },
+  {
     version: "1.6.0",
     date: "2026-11-07",
     notes: [

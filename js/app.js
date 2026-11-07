@@ -14,7 +14,7 @@ import "./agent.js";
 import { CHANGELOG } from "./changelog.js";
 import "./memo.js";
 
-export const VERSION = "1.6.0";
+export const VERSION = "1.6.1";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -410,6 +410,8 @@ async function renderAdmin() {
   <div class="card adm-grid"><h3 class="sec">AgentMail（保護者へのメール）</h3>
     ${inp("agentmail_key", "API キー", "am_…（空で保存すると削除）", true)}
     ${inp("agentmail_inbox", "送信元 inbox_id", "AgentMail の inbox_id")}
+    ${inp("sender_name", "差出人の名前（メールに表示される名前）", "Engdy")}
+    <div class="row"><button class="btn" id="admSender">差出人の名前をいますぐ反映</button><span class="note" id="admSenderOut">${st.sender_applied ? "反映済み：" + esc(String(st.sender_applied).split("|").slice(1).join("|")) : "まだ反映していません（次の送信のときにも自動で反映します）"}</span></div>
     ${inp("mail_enabled", "自動送信（on / off）", "on")}
     <label>テスト送信先<span class="row"><input class="grow" id="admTo" type="email" placeholder="自分のメールアドレス"><select id="admFreq"><option value="daily">毎日</option><option value="weekly" selected>毎週</option><option value="monthly">毎月</option></select><button class="btn sm" id="admTest">テスト送信</button></span></label>
     <div class="row"><button class="btn" id="admRun">今日の分をいますぐ送る</button></div>
@@ -421,6 +423,7 @@ async function renderAdmin() {
     const x = await rpc("engdy_admin_set", { p_token: token(), p_name: k, p_value: v }).catch(() => null);
     toast(x && x.ok ? "保存しました" : reasonText(x && x.reason)); if (x && x.ok) renderAdmin();
   });
+  $("#admSender").onclick = async () => { $("#admSenderOut").textContent = "反映中…"; const x = await fn("admin_set_sender"); $("#admSenderOut").textContent = x.ok ? `反映しました：${x.name}` : reasonText(x.reason); };
   $("#admAi").onclick = async () => { $("#admAiOut").textContent = "確認中…"; const x = await fn("admin_test_ai"); $("#admAiOut").textContent = x.ok ? "OK：" + x.text : reasonText(x.reason); };
   $("#admTest").onclick = async () => { const x = await fn("admin_test_mail", { to: $("#admTo").value, freq: $("#admFreq").value }); toast(x.ok ? "テストメールを送りました" : reasonText(x.reason)); if (x.ok) renderAdmin(); };
   $("#admRun").onclick = async () => {

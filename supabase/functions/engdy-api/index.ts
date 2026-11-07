@@ -57,9 +57,27 @@ async function useAi(cfg: Config, acc: { id: string; is_admin: boolean }) {
 }
 
 // ---------- AgentMail ----------
+// 差出人の名前（受信箱の表示名）。メールごとには変えられないので、受信箱の設定を書き換える
+const senderName = (cfg: Config) => (cfg.settings.sender_name || "Engdy").slice(0, 60);
+async function applySender(cfg: Config, force = false) {
+  const key = cfg.secrets.agentmail_key, inbox = cfg.settings.agentmail_inbox;
+  if (!key || !inbox) throw new Error("no_agentmail");
+  const name = senderName(cfg);
+  if (!force && cfg.settings.sender_applied === `${inbox}|${name}`) return;
+  const res = await fetch(`https://api.agentmail.to/v0/inboxes/${encodeURIComponent(inbox)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({ display_name: name }),
+  });
+  if (!res.ok) throw new Error("agentmail_name_" + res.status + " " + (await res.text()).slice(0, 120));
+  await sb.rpc("engdy_internal_set_setting", { p_name: "sender_applied", p_value: `${inbox}|${name}` });
+  cfg.settings.sender_applied = `${inbox}|${name}`;
+}
 async function sendMail(cfg: Config, to: string, subject: string, html: string, text: string) {
   const key = cfg.secrets.agentmail_key, inbox = cfg.settings.agentmail_inbox;
   if (!key || !inbox) throw new Error("no_agentmail");
+  // 差出人の名前がまだ反映されていなければ、先に入れる（失敗してもメールは送る）
+  try { await applySender(cfg); } catch (_e) { /* 表示名の反映に失敗しても送信は続ける */ }
   const res = await fetch(`https://api.agentmail.to/v0/inboxes/${encodeURIComponent(inbox)}/messages/send`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
@@ -252,6 +270,10 @@ Deno.serve(async (req) => {
       await sendMail(cfg, to, "[テスト] " + m.subject, m.html, m.text);
       await sb.rpc("engdy_internal_mark", { p_account: null, p_ok: true, p_info: "test" });
       return json({ ok: true });
+    }
+    if (action === "admin_set_sender") {
+      await applySender(cfg, true);
+      return json({ ok: true, name: senderName(cfg) });
     }
     if (action === "admin_run_weekly" || action === "admin_run_reports") return json({ ok: true, ...(await sendReports(cfg, dueFreqs())) });
     if (action === "admin_test_ai") {
