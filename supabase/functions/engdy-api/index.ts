@@ -31,29 +31,56 @@ const esc = (s: unknown) =>
 const clip = (s: unknown, n: number) => String(s ?? "").slice(0, n);
 
 // ---------- Gemini ----------
+// API キーは5つまで（gemini_key, gemini_key2〜5）。1つ目で失敗したら、2つ目、3つ目…と順に試す
 type GPart = { text: string } | { inlineData: { mimeType: string; data: string } };
-async function gemini(cfg: Config, system: string, contents: { role: string; text: string; image?: { mime: string; data: string } }[], asJson = false) {
-  const key = cfg.secrets.gemini_key;
-  if (!key) throw new Error("no_gemini_key");
-  const model = cfg.settings.gemini_model || "gemini-3.6-flash";
-  const call = () => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+const KEY_NAMES = ["gemini_key", "gemini_key2", "gemini_key3", "gemini_key4", "gemini_key5"];
+const geminiKeys = (cfg: Config) => KEY_NAMES.map((n) => ({ n, k: cfg.secrets[n] })).filter((x) => x.k);
+// しばらく失敗したキーは、次の数分は後回しにする（同じ処理の中・連続の呼び出しで使う）
+const coolDown = new Map<string, number>();
+
+async function geminiOnce(key: string, model: string, payload: unknown) {
+  return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: contents.map((c) => ({ role: c.role === "model" ? "model" : "user", parts: [...(c.image ? [{ inlineData: { mimeType: c.image.mime, data: c.image.data } }] : []), { text: c.text }] as GPart[] })),
-      generationConfig: { temperature: asJson ? 0.2 : 0.7, maxOutputTokens: 4096, ...(asJson ? { responseMimeType: "application/json" } : {}) },
-    }),
+    body: JSON.stringify(payload),
   });
-  let res = await call();
-  for (const wait of [1500, 4000]) {
-    if (res.status !== 429 && res.status !== 503 && res.status !== 500) break;
-    await new Promise((r) => setTimeout(r, wait));
-    res = await call();
+}
+
+async function gemini(cfg: Config, system: string, contents: { role: string; text: string; image?: { mime: string; data: string } }[], asJson = false, onlyKey?: string) {
+  let keys = geminiKeys(cfg);
+  if (onlyKey) keys = keys.filter((x) => x.n === onlyKey);
+  if (!keys.length) throw new Error("no_gemini_key");
+  const now = Date.now();
+  // 休ませているキーは後ろへ
+  keys.sort((x, y) => ((coolDown.get(x.n) || 0) > now ? 1 : 0) - ((coolDown.get(y.n) || 0) > now ? 1 : 0));
+  const model = cfg.settings.gemini_model || "gemini-3.6-flash";
+  const payload = {
+    systemInstruction: { parts: [{ text: system }] },
+    contents: contents.map((c) => ({ role: c.role === "model" ? "model" : "user", parts: [...(c.image ? [{ inlineData: { mimeType: c.image.mime, data: c.image.data } }] : []), { text: c.text }] as GPart[] })),
+    generationConfig: { temperature: asJson ? 0.2 : 0.7, maxOutputTokens: 4096, ...(asJson ? { responseMimeType: "application/json" } : {}) },
+  };
+  let last = 0;
+  for (const { n, k } of keys) {
+    let res = await geminiOnce(k, model, payload);
+    // 混み合い（503・500）は同じキーで1回だけやり直す。回数の上限（429）やキーの間違い（400・401・403）はすぐ次のキーへ
+    if (res.status === 503 || res.status === 500) { await new Promise((r) => setTimeout(r, 1200)); res = await geminiOnce(k, model, payload); }
+    if (res.ok) {
+      coolDown.delete(n);
+      const d = await res.json();
+      return (d?.candidates?.[0]?.content?.parts || []).map((p: { text?: string }) => p.text || "").join("");
+    }
+    last = res.status;
+    coolDown.set(n, Date.now() + (res.status === 429 ? 5 * 60e3 : 60e3));
+    if (![429, 500, 503, 400, 401, 403].includes(res.status)) break;   // それ以外（リクエストの中身の問題など）は、ほかのキーでも同じなのでやめる
   }
-  if (!res.ok) throw new Error("gemini_" + res.status);
-  const d = await res.json();
-  return (d?.candidates?.[0]?.content?.parts || []).map((p: { text?: string }) => p.text || "").join("");
+  // 全部だめで、混み合いが理由なら、少し待って1つ目でもう一度
+  if ((last === 429 || last === 503) && !onlyKey) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const res = await geminiOnce(keys[0].k, model, payload);
+    if (res.ok) { const d = await res.json(); return (d?.candidates?.[0]?.content?.parts || []).map((p: { text?: string }) => p.text || "").join(""); }
+    last = res.status;
+  }
+  throw new Error("gemini_" + last);
 }
 
 async function useAi(cfg: Config, acc: { id: string; is_admin: boolean }) {
@@ -204,7 +231,7 @@ const wordsOf = (v: unknown, n: number) => (Array.isArray(v) ? v : []).map((w) =
 
 // 保護者メール（毎週・毎月）に入れる、AI のひとこと
 async function aiComment(cfg: Config, t: Target, freq: Freq) {
-  if (!cfg.secrets.gemini_key || freq === "daily") return "";
+  if (!geminiKeys(cfg).length || freq === "daily") return "";
   const sum = t.days.reduce((a, d) => ({ s: a.s + d.seconds, w: a.w + d.words, tt: a.tt + d.test_total, tc: a.tc + d.test_correct, n: a.n + (d.seconds > 0 || d.test_total > 0 ? 1 : 0) }), { s: 0, w: 0, tt: 0, tc: 0, n: 0 });
   try {
     const out = await gemini(cfg, "あなたは英語学習アプリ Engdy のコーチです。保護者向けに、子どもの学習記録から、良かった点と次へのひとことを、やさしい日本語で3文以内で書いてください。数字を使って具体的に。絵文字や記号の装飾は使わない。",
@@ -456,8 +483,13 @@ Deno.serve(async (req) => {
     }
     if (action === "admin_run_weekly" || action === "admin_run_reports") return json({ ok: true, ...(await sendReports(cfg, dueFreqs())) });
     if (action === "admin_test_ai") {
-      const out = await gemini(cfg, "日本語で一言だけ返答してください。", [{ role: "user", text: "動作確認です。「OK」と返してください。" }]);
-      return json({ ok: true, text: clip(out, 200) });
+      const results: { name: string; ok: boolean; info: string }[] = [];
+      for (const { n } of geminiKeys(cfg)) {
+        try { const out = await gemini(cfg, "日本語で一言だけ返答してください。", [{ role: "user", text: "動作確認です。「OK」と返してください。" }], false, n); results.push({ name: n, ok: true, info: clip(out, 40) }); }
+        catch (e) { results.push({ name: n, ok: false, info: String((e as Error).message) }); }
+      }
+      if (!results.length) return json({ ok: false, reason: "no_gemini_key" });
+      return json({ ok: true, results });
     }
     return json({ ok: false, reason: "action" }, 400);
   } catch (e) {

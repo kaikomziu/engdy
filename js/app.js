@@ -16,7 +16,7 @@ import "./memo.js";
 import { voices, say } from "./voice.js";
 import { initPwa, install, canInstall, isStandalone, isIOS, onPwaChange, cacheMusic, musicCached, clearMusic, musicTotal } from "./pwa.js";
 
-export const VERSION = "1.11.0";
+export const VERSION = "1.11.1";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -505,11 +505,12 @@ async function renderAdmin() {
     <div>AI の保存済み結果<b>${c.ai_cache}</b></div><div>7日で節約した呼び出し<b>${c.ai_saved_7d}</b></div><div>7日で呼んだ回数<b>${c.ai_called_7d}</b></div></div>
     <p class="hint">単語の意味・似た単語・穴埋めの英文・図鑑の解説・テーマのリストは、いちど AI に聞いた結果をみんなで使い回します。</p></div>
   <div class="card adm-grid"><h3 class="sec">Gemini（専属エージェント・意味の自動入力）</h3>
-    ${inp("gemini_key", "API キー", "AIza…（空で保存すると削除）", true)}
+    <p class="hint">API キーは5つまで登録できます。1つ目で失敗したら（回数の上限・キーの間違いなど）、2つ目、3つ目…と順に試します。</p>
+    ${[1, 2, 3, 4, 5].map((i) => inp(i === 1 ? "gemini_key" : "gemini_key" + i, `API キー ${i}`, i === 1 ? "AIza…（空で保存すると削除）" : "予備（なくても大丈夫）", true)).join("")}
     ${inp("gemini_model", "モデル", "gemini-3.6-flash")}
     ${inp("ai_daily_limit", "1人1日の AI 利用回数", "40")}
     ${inp("agent_enabled", "専属エージェント（on / off）", "on")}
-    <div class="row"><button class="btn" id="admAi">AI の動作確認</button><span class="note" id="admAiOut"></span></div></div>
+    <div class="row" style="align-items:flex-start"><button class="btn" id="admAi">AI の動作確認</button><span class="note" id="admAiOut"></span></div></div>
   <div class="card adm-grid"><h3 class="sec">AgentMail（保護者へのメール）</h3>
     ${inp("agentmail_key", "API キー", "am_…（空で保存すると削除）", true)}
     ${inp("agentmail_inbox", "送信元 inbox_id", "AgentMail の inbox_id")}
@@ -527,7 +528,11 @@ async function renderAdmin() {
     toast(x && x.ok ? "保存しました" : reasonText(x && x.reason)); if (x && x.ok) renderAdmin();
   });
   $("#admSender").onclick = async () => { $("#admSenderOut").textContent = "反映中…"; const x = await fn("admin_set_sender"); $("#admSenderOut").textContent = x.ok ? `反映しました：${x.name}` : reasonText(x.reason); };
-  $("#admAi").onclick = async () => { $("#admAiOut").textContent = "確認中…"; const x = await fn("admin_test_ai"); $("#admAiOut").textContent = x.ok ? "OK：" + x.text : reasonText(x.reason); };
+  $("#admAi").onclick = async () => {
+    $("#admAiOut").textContent = "確認中…（キーごとに試します）";
+    const x = await fn("admin_test_ai");
+    $("#admAiOut").innerHTML = x.ok ? x.results.map((r) => `${r.ok ? "✓" : "✕"} キー${r.name === "gemini_key" ? 1 : r.name.slice(-1)}：${esc(r.ok ? r.info : reasonText(r.info))}`).join("<br>") : esc(reasonText(x.reason));
+  };
   $("#admTest").onclick = async () => { const x = await fn("admin_test_mail", { to: $("#admTo").value, freq: $("#admFreq").value }); toast(x.ok ? "テストメールを送りました" : reasonText(x.reason)); if (x.ok) renderAdmin(); };
   $("#admRun").onclick = async () => {
     if (!(await confirmBox("今日の分を送りますか？", "今日が送る日になっている人（毎日の人、日曜なら毎週の人、1日なら毎月の人）に、いますぐレポートを送ります。", "送る"))) return;
