@@ -15,9 +15,10 @@ import { CHANGELOG } from "./changelog.js";
 import "./memo.js";
 import { voices, say } from "./voice.js";
 import { renderQuote, notify, testDiscord, DISCORD_EVENTS, pushRank, leaveRank } from "./social.js";
+import { renderBoardAdmin, showRules } from "./board.js";
 import { initPwa, install, canInstall, isStandalone, isIOS, onPwaChange, cacheMusic, musicCached, clearMusic, musicTotal } from "./pwa.js";
 
-export const VERSION = "1.12.1";
+export const VERSION = "1.13.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -324,6 +325,9 @@ onEnter("settings", () => {
     <div class="card"><h3 class="sec">👪 保護者メール</h3>
       <div class="set-row"><label>保護者に学習レポートを送る<small>毎日・毎週・毎月から選べます（ログインが必要）</small></label><button class="btn sm" data-go="parent">設定を開く</button></div>
     </div>
+    <div class="card"><h3 class="sec">💬 掲示板</h3>
+      <div class="set-row"><label>勉強している人どうしで話す<small>読むのはだれでも、書くのはログインした人だけ</small></label><span class="row"><button class="btn sm ghost" id="setBoardRules">ルール</button><button class="btn sm" data-go="board">掲示板へ</button></span></div>
+    </div>
     <div class="card"><h3 class="sec">🏆 ランキング</h3>
     <div class="set-row"><label>ランキングに参加する<small>連続学習日数・テストのベスト・図鑑の数・学習時間を、表示名といっしょに公開します（ログインが必要）</small></label><input type="checkbox" id="setRank" ${st.rankJoin !== false ? "checked" : ""}></div>
       <div class="set-row"><label>いまの順位を見る</label><button class="btn sm" data-go="ranking">ランキングへ</button></div>
@@ -356,6 +360,7 @@ onEnter("settings", () => {
   showSec();
   $("#setTabs").onclick = (e) => { const b = e.target.closest("[data-st]"); if (!b) return; setTab = b.dataset.st; showSec(); stopPreview(); scrollTo(0, 0); };
   $("#setKeys").onclick = showKeys;
+  $("#setBoardRules").onclick = showRules;
   $("#setAcct").onclick = () => { if (window.KaAccount) (KaAccount.isLoggedIn() ? KaAccount.openPanel() : KaAccount.login("login")); };
   const bind = (id, key, label, after) => {
     const el = $(id);
@@ -575,6 +580,7 @@ async function renderAdmin() {
     <div>保護者メール<b>${c.parents_active}</b></div><div>今日の AI 利用<b>${c.ai_today}</b></div>
     <div>AI の保存済み結果<b>${c.ai_cache}</b></div><div>7日で節約した呼び出し<b>${c.ai_saved_7d}</b></div><div>7日で呼んだ回数<b>${c.ai_called_7d}</b></div></div>
     <p class="hint">単語の意味・似た単語・穴埋めの英文・図鑑の解説・テーマのリストは、いちど AI に聞いた結果をみんなで使い回します。</p></div>
+  <div class="card"><h3 class="sec">🚩 掲示板の通報</h3><div id="admBoard"><span class="spinner"></span></div></div>
   <div class="card adm-grid"><h3 class="sec">Gemini（専属エージェント・意味の自動入力）</h3>
     <p class="hint">API キーは20個まで登録できます。1つ目で失敗したら（回数の上限・キーの間違いなど）、2つ目、3つ目…と順に試します。上限は Google のプロジェクトごとなので、予備は別のプロジェクトで作ったキーにしてください。</p>
     ${(() => {
@@ -606,6 +612,7 @@ async function renderAdmin() {
     <p class="hint">自動送信：毎日 19:00（日本時間）。毎日の人は毎日、毎週の人は日曜、毎月の人は1日（前の月の分）。認証が済んだ人だけに送ります。</p>
     <table class="wtable"><tr><th>日時</th><th>結果</th><th>内容</th></tr>${(r.mail_log || []).map((l) => `<tr><td>${new Date(l.sent_at).toLocaleString("ja-JP")}</td><td>${l.ok ? "✓" : "✕"}</td><td>${esc(l.info || "")}</td></tr>`).join("") || `<tr><td colspan="3" class="note">まだ送信していません</td></tr>`}</table>
   </div>`;
+  renderBoardAdmin($("#admBoard"));
   $$("[data-save]", body).forEach((b) => b.onclick = async () => {
     const k = b.dataset.save, v = $(`[data-k="${k}"]`, body).value;
     const x = await rpc("engdy_admin_set", { p_token: token(), p_name: k, p_value: v }).catch(() => null);

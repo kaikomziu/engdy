@@ -555,3 +555,29 @@ html[data-mode="dark"] .spell .miss{background:rgba(220,90,70,.25)}
 .qlink span{font-size:22px}
 .qlink:hover{border-color:var(--accent)}
 @media (max-width:420px){.qlink{font-size:11px;padding:10px 4px}.set-tabs button{min-width:70px;font-size:11px}}
+
+/* v1.13.0 掲示板 */
+.rules{margin:8px 0;padding-left:22px;display:grid;gap:10px}
+.rules li b{display:block}
+.rules li span{font-size:13px;color:var(--sub)}
+.board-top .tabs{overflow-x:auto;scrollbar-width:none}
+.board-top .tab{white-space:nowrap}
+.bd-list{display:grid;gap:10px}
+.bd-post,.bd-reply{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow)}
+.bd-reply{box-shadow:none;margin-left:14px}
+.bd-replies{display:grid;gap:8px}
+.bd-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px}
+.bd-head .note{font-size:12px}
+.bd-av{font-size:20px}
+.bd-menu{margin-left:auto;font-size:18px;padding:0 6px;border:none}
+.bd-body{margin:8px 0 4px;white-space:normal;word-break:break-word;line-height:1.7;cursor:pointer}
+.bd-foot{display:flex;gap:14px;align-items:center;margin-top:6px}
+.bd-like{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:3px 12px;font-size:13px}
+.bd-like.on{border-color:#e2463b;color:#e2463b}
+.bd-list-btn{margin:6px 0}
+.is-hidden{opacity:.55}
+.bd-replybox{margin-top:12px;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:12px}
+.bd-replybox textarea{font-family:var(--sans);font-size:15px}
+.wrap-seg{flex-wrap:wrap;border-radius:14px}
+.bd-adm{border-top:1px solid var(--line);padding:10px 0}
+.bd-adm:first-child{border-top:none}

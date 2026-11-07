@@ -7,7 +7,7 @@ import { bgm } from "./audio.js";
 const hooks = {};      // 画面に入ったときに呼ぶ関数
 const leaves = {};     // 画面を出るときに呼ぶ関数
 const backs = [];      // 「戻る」を先に受け取る関数（モーダルやガチャ演出を閉じる）。true を返したら画面は移らない
-const MUSIC = { login: "menu", main: "menu", create: "menu", browse: "menu", stats: "menu", collection: "menu", parent: "menu", settings: "menu", credits: "menu", changelog: "menu", ranking: "menu", admin: "menu", view: "study", viewdone: "study", test: "test", agent: "study", gacha: "gacha", memo: "memo" };
+const MUSIC = { login: "menu", main: "menu", create: "menu", browse: "menu", stats: "menu", collection: "menu", parent: "menu", settings: "menu", credits: "menu", changelog: "menu", ranking: "menu", board: "menu", admin: "menu", view: "study", viewdone: "study", test: "test", agent: "study", gacha: "gacha", memo: "memo" };
 const ROOTS = ["main", "login"];
 let current = "", pushed = false, ignorePop = false;
 

@@ -1,11 +1,11 @@
 // Engdy のサービスワーカー：ホーム画面に追加したアプリとして動かすため・オフラインで使うため
 // 更新したら VERSION を上げる（古いキャッシュを消して入れ直す）
-const VERSION = "engdy-1.12.1";
-const V = "?v=1.12.1";
+const VERSION = "engdy-1.13.0";
+const V = "?v=1.13.0";
 const MUSIC = "engdy-music";
 const SHELL = [
   "./", "./index.html", `./css/style.css${V}`, "./icon.svg", "./manifest.webmanifest",
-  ...["agent", "api", "app", "audio", "changelog", "crypto", "gacha", "items", "lists", "router", "stats", "store", "test", "util", "view", "memo", "sample", "pwa", "voice", "speech", "social"].map((m) => `./js/${m}.js${V}`),
+  ...["agent", "api", "app", "audio", "changelog", "crypto", "gacha", "items", "lists", "router", "stats", "store", "test", "util", "view", "memo", "sample", "pwa", "voice", "speech", "social", "board"].map((m) => `./js/${m}.js${V}`),
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png",
   ...["roll", "tick", "stop", "boom", "pop", "slow", "flash", "shine"].map((n) => `./assets/sfx/${n}.mp3`),
 ];

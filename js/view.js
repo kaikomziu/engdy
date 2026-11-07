@@ -217,10 +217,12 @@ function finish() {
     <div class="row wrap" style="justify-content:center;margin-top:14px">
       <button class="btn" id="vdAgain">${done.pos ? "続きをやる" : "もう1周"}</button>
       <button class="btn" data-go="test">テストする</button>
+      <button class="btn" id="vdBoard">💬 掲示板に報告</button>
       <button class="btn pri" id="vdHome">メインへ</button></div>`;
   go("viewdone");
   $("#vdAgain").onclick = () => startList(done.src);
   $("#vdHome").onclick = () => go("main", { newStamp: lap.stamped });
+  $("#vdBoard").onclick = () => go("board", { compose: { cat: "report", body: `「${done.title}」を${partial ? done.words.length + "語" : "1周"}やりました！（${fmtDuration(done.seconds)}）` } });
   if (lap.stamped) toast(`💎 +${lap.gained}`);
 }
 

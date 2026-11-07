@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Engdy">
-<link rel="stylesheet" href="css/style.css?v=1.12.1">
+<link rel="stylesheet" href="css/style.css?v=1.13.0">
 <script src="https://kaikomziu.github.io/game-links/js/karuwaka-account.js" data-game="engdy" data-keys="engdy_v1,engdy_lists,engdy_memo" data-badge="off"></script>
 </head>
 <body>
@@ -59,6 +59,7 @@
       <button class="mitem" data-go="agent" id="agentItem"><span class="mi-no">05</span><span class="mi-t">専属エージェント<small>AGENT</small></span><span class="lock" id="agentLock">🔒</span></button>
       <button class="mitem" data-go="gacha"><span class="mi-no">06</span><span class="mi-t">ガチャ<small>GACHA</small></span></button>
       <button class="mitem" data-go="memo"><span class="mi-no">07</span><span class="mi-t">自由メモ<small>NOTE</small></span></button>
+      <button class="mitem" data-go="board"><span class="mi-no">08</span><span class="mi-t">掲示板<small>BOARD</small></span></button>
     </nav>
     <div class="quick-links">
       <button class="qlink" data-go="ranking"><span>🏆</span>ランキング</button>
@@ -265,9 +266,15 @@
         <dt>名言</dt><dd>ZenQuotes.io</dd>
         <dt>BGM</dt><dd>ふぁいの音楽置き場（fai-musics）<br>「ほっこりひととき」「静かな図書室で」「おひるすぎ」「黄昏メロウノート」「なんだっけ？」「ゆううつ雨模様」<br>MusMus（watson）「ひとやすみ」「Lightning Brain」<br>DOVA-SYNDROME しゃろう「2:23 AM」</dd>
       </dl>
-      <p class="hint">バージョン <span class="ver">v1.12.1</span></p>
+      <p class="hint">バージョン <span class="ver">v1.13.0</span></p>
     </div>
   </div>
+</section>
+
+<!-- ===== 掲示板 ===== -->
+<section id="s-board" class="screen">
+  <header class="pagebar"><button class="back" data-go="main">←</button><div><p class="kicker">08 BOARD</p><h2>掲示板</h2></div></header>
+  <div class="page narrow" id="boardBody"></div>
 </section>
 
 <!-- ===== ランキング ===== -->
@@ -300,7 +307,7 @@
 <div id="modal" class="modal" hidden><div class="modal-card card" id="modalCard"></div></div>
 <div id="toast" class="toast" hidden></div>
 
-<script type="importmap">{"imports":{"./js/agent.js":"./js/agent.js?v=1.12.1","./js/api.js":"./js/api.js?v=1.12.1","./js/app.js":"./js/app.js?v=1.12.1","./js/audio.js":"./js/audio.js?v=1.12.1","./js/changelog.js":"./js/changelog.js?v=1.12.1","./js/crypto.js":"./js/crypto.js?v=1.12.1","./js/gacha.js":"./js/gacha.js?v=1.12.1","./js/items.js":"./js/items.js?v=1.12.1","./js/lists.js":"./js/lists.js?v=1.12.1","./js/router.js":"./js/router.js?v=1.12.1","./js/stats.js":"./js/stats.js?v=1.12.1","./js/store.js":"./js/store.js?v=1.12.1","./js/test.js":"./js/test.js?v=1.12.1","./js/util.js":"./js/util.js?v=1.12.1","./js/view.js":"./js/view.js?v=1.12.1","./js/memo.js":"./js/memo.js?v=1.12.1","./js/sample.js":"./js/sample.js?v=1.12.1","./js/pwa.js":"./js/pwa.js?v=1.12.1","./js/voice.js":"./js/voice.js?v=1.12.1","./js/speech.js":"./js/speech.js?v=1.12.1","./js/social.js":"./js/social.js?v=1.12.1"}}</script>
-<script type="module" src="js/app.js?v=1.12.1"></script>
+<script type="importmap">{"imports":{"./js/agent.js":"./js/agent.js?v=1.13.0","./js/api.js":"./js/api.js?v=1.13.0","./js/app.js":"./js/app.js?v=1.13.0","./js/audio.js":"./js/audio.js?v=1.13.0","./js/changelog.js":"./js/changelog.js?v=1.13.0","./js/crypto.js":"./js/crypto.js?v=1.13.0","./js/gacha.js":"./js/gacha.js?v=1.13.0","./js/items.js":"./js/items.js?v=1.13.0","./js/lists.js":"./js/lists.js?v=1.13.0","./js/router.js":"./js/router.js?v=1.13.0","./js/stats.js":"./js/stats.js?v=1.13.0","./js/store.js":"./js/store.js?v=1.13.0","./js/test.js":"./js/test.js?v=1.13.0","./js/util.js":"./js/util.js?v=1.13.0","./js/view.js":"./js/view.js?v=1.13.0","./js/memo.js":"./js/memo.js?v=1.13.0","./js/sample.js":"./js/sample.js?v=1.13.0","./js/pwa.js":"./js/pwa.js?v=1.13.0","./js/voice.js":"./js/voice.js?v=1.13.0","./js/speech.js":"./js/speech.js?v=1.13.0","./js/social.js":"./js/social.js?v=1.13.0","./js/board.js":"./js/board.js?v=1.13.0"}}</script>
+<script type="module" src="js/app.js?v=1.13.0"></script>
 </body>
 </html>
