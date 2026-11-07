@@ -31,9 +31,10 @@ const esc = (s: unknown) =>
 const clip = (s: unknown, n: number) => String(s ?? "").slice(0, n);
 
 // ---------- Gemini ----------
-// API キーは5つまで（gemini_key, gemini_key2〜5）。1つ目で失敗したら、2つ目、3つ目…と順に試す
+// API キーは20個まで（gemini_key, gemini_key2〜20）。1つ目で失敗したら、2つ目、3つ目…と順に試す
 type GPart = { text: string } | { inlineData: { mimeType: string; data: string } };
-const KEY_NAMES = ["gemini_key", "gemini_key2", "gemini_key3", "gemini_key4", "gemini_key5"];
+export const MAX_KEYS = 20;
+const KEY_NAMES = Array.from({ length: MAX_KEYS }, (_, i) => (i === 0 ? "gemini_key" : `gemini_key${i + 1}`));
 const geminiKeys = (cfg: Config) => KEY_NAMES.map((n) => ({ n, k: cfg.secrets[n] })).filter((x) => x.k);
 // しばらく失敗したキーは、次の数分は後回しにする（同じ処理の中・連続の呼び出しで使う）
 const coolDown = new Map<string, number>();

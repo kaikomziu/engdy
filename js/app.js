@@ -16,7 +16,7 @@ import "./memo.js";
 import { voices, say } from "./voice.js";
 import { initPwa, install, canInstall, isStandalone, isIOS, onPwaChange, cacheMusic, musicCached, clearMusic, musicTotal } from "./pwa.js";
 
-export const VERSION = "1.11.1";
+export const VERSION = "1.11.2";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -489,6 +489,7 @@ async function renderParent() {
 }
 
 // ================= admin（かるわかGAMES 管理者だけ。権限はサーバーで確認） =================
+let admKeyRows = 1;   // admin に出す Gemini のキーの欄の数
 onEnter("admin", renderAdmin);
 async function renderAdmin() {
   const body = $("#adminBody");
@@ -505,8 +506,16 @@ async function renderAdmin() {
     <div>AI の保存済み結果<b>${c.ai_cache}</b></div><div>7日で節約した呼び出し<b>${c.ai_saved_7d}</b></div><div>7日で呼んだ回数<b>${c.ai_called_7d}</b></div></div>
     <p class="hint">単語の意味・似た単語・穴埋めの英文・図鑑の解説・テーマのリストは、いちど AI に聞いた結果をみんなで使い回します。</p></div>
   <div class="card adm-grid"><h3 class="sec">Gemini（専属エージェント・意味の自動入力）</h3>
-    <p class="hint">API キーは5つまで登録できます。1つ目で失敗したら（回数の上限・キーの間違いなど）、2つ目、3つ目…と順に試します。</p>
-    ${[1, 2, 3, 4, 5].map((i) => inp(i === 1 ? "gemini_key" : "gemini_key" + i, `API キー ${i}`, i === 1 ? "AIza…（空で保存すると削除）" : "予備（なくても大丈夫）", true)).join("")}
+    <p class="hint">API キーは20個まで登録できます。1つ目で失敗したら（回数の上限・キーの間違いなど）、2つ目、3つ目…と順に試します。上限は Google のプロジェクトごとなので、予備は別のプロジェクトで作ったキーにしてください。</p>
+    ${(() => {
+      // 登録済みのキーの欄＋空の欄を1つ出す。「＋ 欄を増やす」で20個まで
+      const keyName = (i) => (i === 1 ? "gemini_key" : "gemini_key" + i);
+      const used = [...Array(20).keys()].map((i) => i + 1).filter((i) => sec[keyName(i)]);
+      const show = Math.min(20, Math.max(admKeyRows, (used.length ? Math.max(...used) : 0) + 1));
+      admKeyRows = show;
+      return [...Array(show).keys()].map((i) => i + 1).map((i) => inp(keyName(i), `API キー ${i}`, i === 1 ? "AIza…（空で保存すると削除）" : "予備（なくても大丈夫）", true)).join("")
+        + `<div class="row"><span class="note">登録済み ${used.length} / 20</span>${show < 20 ? `<button class="btn sm" id="admMoreKey">＋ 欄を増やす</button>` : ""}</div>`;
+    })()}
     ${inp("gemini_model", "モデル", "gemini-3.6-flash")}
     ${inp("ai_daily_limit", "1人1日の AI 利用回数", "40")}
     ${inp("agent_enabled", "専属エージェント（on / off）", "on")}
@@ -527,11 +536,12 @@ async function renderAdmin() {
     const x = await rpc("engdy_admin_set", { p_token: token(), p_name: k, p_value: v }).catch(() => null);
     toast(x && x.ok ? "保存しました" : reasonText(x && x.reason)); if (x && x.ok) renderAdmin();
   });
+  const mk = $("#admMoreKey"); if (mk) mk.onclick = () => { admKeyRows = Math.min(20, admKeyRows + 1); renderAdmin(); };
   $("#admSender").onclick = async () => { $("#admSenderOut").textContent = "反映中…"; const x = await fn("admin_set_sender"); $("#admSenderOut").textContent = x.ok ? `反映しました：${x.name}` : reasonText(x.reason); };
   $("#admAi").onclick = async () => {
     $("#admAiOut").textContent = "確認中…（キーごとに試します）";
     const x = await fn("admin_test_ai");
-    $("#admAiOut").innerHTML = x.ok ? x.results.map((r) => `${r.ok ? "✓" : "✕"} キー${r.name === "gemini_key" ? 1 : r.name.slice(-1)}：${esc(r.ok ? r.info : reasonText(r.info))}`).join("<br>") : esc(reasonText(x.reason));
+    $("#admAiOut").innerHTML = x.ok ? x.results.map((r) => `${r.ok ? "✓" : "✕"} キー${r.name.replace("gemini_key", "") || 1}：${esc(r.ok ? r.info : reasonText(r.info))}`).join("<br>") : esc(reasonText(x.reason));
   };
   $("#admTest").onclick = async () => { const x = await fn("admin_test_mail", { to: $("#admTo").value, freq: $("#admFreq").value }); toast(x.ok ? "テストメールを送りました" : reasonText(x.reason)); if (x.ok) renderAdmin(); };
   $("#admRun").onclick = async () => {
