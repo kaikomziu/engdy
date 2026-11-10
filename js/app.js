@@ -18,7 +18,7 @@ import { renderQuote, notify, testDiscord, DISCORD_EVENTS, pushRank, leaveRank }
 import { renderBoardAdmin, showRules } from "./board.js";
 import { initPwa, install, canInstall, isStandalone, isIOS, onPwaChange, cacheMusic, musicCached, clearMusic, musicTotal } from "./pwa.js";
 
-export const VERSION = "1.14.0";
+export const VERSION = "1.15.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -251,7 +251,7 @@ function enterApp() {
   go("main");
   if (pendingGo) { const g = pendingGo; pendingGo = null; go(g); return; }
   if (!pendingShared) setTimeout(welcome, 400);
-  if (pendingShared) { const c = pendingShared; pendingShared = null; openShared(c); }
+  if (pendingShared) { const c = pendingShared; pendingShared = null; openShared(c.code, null, c.key); }
 }
 
 // ================= 1日の記録をサーバーへ（保護者メール用。ログイン中だけ） =================
@@ -676,7 +676,11 @@ async function boot() {
   }
   const GO_OK = ["browse", "test", "memo", "stats", "create", "gacha"];
   if (GO_OK.includes(q.get("go"))) { pendingGo = q.get("go"); history.replaceState(null, "", location.pathname); }
-  if (q.get("list")) { pendingShared = q.get("list"); history.replaceState(null, "", location.pathname); }
+  if (q.get("list")) {
+    const key = new URLSearchParams(location.hash.slice(1)).get("k");
+    pendingShared = { code: q.get("list"), key };
+    history.replaceState(null, "", location.pathname);   // 鍵を URL バーや履歴に残さない
+  }
 
   if (window.KaAccount) {
     await Promise.race([KaAccount.ready, sleep(4000)]).catch(() => {});

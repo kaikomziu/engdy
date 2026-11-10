@@ -2,7 +2,7 @@
 import { $, $$, esc, toast, modal, confirmBox, download, readFile, shuffle } from "./util.js";
 import { S, save, loadLists, saveLists, parseWords, wordsToText, parseTable } from "./store.js";
 import { rpc, fn, token, reasonText } from "./api.js";
-import { seal, open } from "./crypto.js";
+import { seal, sealWithNewKey, open, lockType } from "./crypto.js";
 import { go, onEnter, onLeave } from "./router.js";
 import { tone } from "./audio.js";
 import { SAMPLE_TITLE, SAMPLE_WORDS } from "./sample.js";
@@ -12,7 +12,7 @@ let lists = loadLists();
 let curId = null;
 const uid = () => "l" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const cur = () => lists.find((l) => l.id === curId) || null;
-const shareUrl = (code) => `${SHARE_BASE}?list=${encodeURIComponent(code)}`;
+const shareUrl = (code, key) => `${SHARE_BASE}?list=${encodeURIComponent(code)}${key ? "#k=" + key : ""}`;
 const VIS = { public: "全体公開", password: "パスワード", url: "URL限定" };
 
 // サンプルの単語リストを入れる（まだなければ）
@@ -80,9 +80,9 @@ function renderPreview() {
 function renderPubInfo() {
   const l = cur();
   $("#pubInfo").innerHTML = l && l.remote
-    ? `公開中（${VIS[l.remote.vis]}）：<a href="${shareUrl(l.remote.code)}" target="_blank" rel="noopener">${esc(shareUrl(l.remote.code))}</a> <button class="btn sm" id="copyUrl">URL をコピー</button> <button class="btn sm ghost" id="unpublish">公開をやめる</button>`
+    ? `公開中（${VIS[l.remote.vis]}${l.remote.key ? "・🔑 鍵つき" : ""}）：<a href="${shareUrl(l.remote.code, l.remote.key)}" target="_blank" rel="noopener">${esc(shareUrl(l.remote.code, l.remote.key))}</a> <button class="btn sm" id="copyUrl">URL をコピー</button> <button class="btn sm ghost" id="unpublish">公開をやめる</button>`
     : "";
-  const c = $("#copyUrl"); if (c) c.onclick = () => navigator.clipboard.writeText(shareUrl(l.remote.code)).then(() => toast("コピーしました"));
+  const c = $("#copyUrl"); if (c) c.onclick = () => navigator.clipboard.writeText(shareUrl(l.remote.code, l.remote.key)).then(() => toast("コピーしました"));
   const u = $("#unpublish"); if (u) u.onclick = unpublish;
 }
 let pv, autoT;
@@ -293,9 +293,18 @@ export function createListFrom(title, items) {
 // ---- .engdy ファイル ----
 $("#exportFile").onclick = async () => {
   const l = saveLocal(true); if (!l) return;
-  const text = await seal({ app: "engdy", title: l.title, words: l.words });
+  const opt = await modal(`<p class="kicker">EXPORT</p><h3>.engdy で書き出す</h3>
+    <p class="hint">ファイルは暗号化して保存されます。パスワードを付けると、パスワードを知らない人には中身が読めなくなります。</p>
+    <label class="field"><span>パスワード（任意・4〜64文字）</span><input id="exPw" type="password" maxlength="64" autocomplete="new-password" placeholder="付けないときは空のまま"></label>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" data-close>やめる</button><button class="btn pri" id="exGo">書き出す</button></div>`,
+    (c, close) => {
+      const go = () => { const pw = c.querySelector("#exPw").value; if (pw && (pw.length < 4 || pw.length > 64)) { toast("パスワードは4〜64文字にしてください"); return; } close({ pw }); };
+      c.querySelector("#exGo").onclick = go; c.querySelector("#exPw").onkeydown = (e) => e.key === "Enter" && go();
+    });
+  if (!opt) return;
+  const text = await seal({ app: "engdy", title: l.title, words: l.words }, opt.pw ? { password: opt.pw } : null);
   download(`${l.title.replace(/[\\/:*?"<>|]/g, "_")}.engdy`, text);
-  toast(".engdy ファイルを書き出しました");
+  toast(opt.pw ? "🔒 パスワード付きで書き出しました（パスワードを忘れると開けません）" : ".engdy ファイルを書き出しました", 3500);
 };
 $("#importFile").onclick = () => $("#fileInput").click();
 $("#fileInput").onchange = async (e) => {
@@ -313,7 +322,15 @@ async function readEngdy(file) {
     return { title: file.name.replace(/\.(csv|tsv|txt)$/i, "").slice(0, 60), words };
   }
   try {
-    const d = await open(await readFile(file));
+    const text = await readFile(file);
+    let pw = null;
+    if (lockType(text) === "p") {
+      pw = await askPassword(file.name.replace(/\.engdy$/i, ""), false);
+      if (!pw) return null;
+    }
+    let d;
+    try { d = await open(text, pw ? { password: pw } : null); }
+    catch (e) { if (pw) { toast("パスワードが違います"); return null; } throw e; }
     if (!d || !Array.isArray(d.words)) throw 0;
     return { title: String(d.title || file.name.replace(/\.engdy$/i, "")).slice(0, 60), words: parseWords(wordsToText(d.words)) };
   } catch (e) { toast("Engdy のファイルとして読み込めませんでした"); return null; }
@@ -328,7 +345,7 @@ $("#publishList").onclick = async () => {
     <label class="field"><span>ひとこと説明（任意）</span><input id="pubDesc" maxlength="200" value="${esc(l.desc || "")}" placeholder="例：中2の教科書 Unit 3 の単語"></label>
     <label class="radio"><input type="radio" name="vis" value="public" ${vis0 === "public" ? "checked" : ""}><span><b>全体公開</b><small>「みんなのリスト」に表示され、だれでも使えます</small></span></label>
     <label class="radio"><input type="radio" name="vis" value="password" ${vis0 === "password" ? "checked" : ""}><span><b>パスワード</b><small>一覧には表示されますが、パスワードを入れないと使えません</small></span></label>
-    <label class="radio"><input type="radio" name="vis" value="url" ${vis0 === "url" ? "checked" : ""}><span><b>URL限定</b><small>一覧には出ません。共有URLを知っている人だけが使えます</small></span></label>
+    <label class="radio"><input type="radio" name="vis" value="url" ${vis0 === "url" ? "checked" : ""}><span><b>URL限定（🔑 鍵つき）</b><small>一覧には出ません。共有URLを知っている人だけが使えます。鍵は URL の中だけにあり、サーバーにも中身は読めません</small></span></label>
     <label class="field" id="pwRow" ${vis0 === "password" ? "" : "hidden"}><span>パスワード（4〜64文字）</span><input id="pubPw" type="text" maxlength="64" autocomplete="off"></label>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" data-close>キャンセル</button><button class="btn pri" id="pubGo">公開する</button></div>`,
     (c, close) => {
@@ -340,16 +357,20 @@ $("#publishList").onclick = async () => {
       };
     });
   if (!res) return;
-  const payload = await seal({ app: "engdy", title: l.title, words: l.words }, res.vis === "password" ? res.pw : null);
+  // URL 限定：その場で作った鍵で暗号化し、鍵は共有 URL の「#」の後ろにだけ入れる（サーバーには送らない）
+  let payload, key = null;
+  const body = { app: "engdy", title: l.title, words: l.words };
+  if (res.vis === "url") { const s = await sealWithNewKey(body); payload = s.text; key = s.key; }
+  else payload = await seal(body, res.vis === "password" ? { password: res.pw } : null);
   const r = await rpc("engdy_list_save", { p_token: token(), p_id: (l.remote && l.remote.id) || null, p_title: l.title, p_desc: res.desc,
     p_vis: res.vis, p_password: res.vis === "password" ? res.pw : null, p_payload: payload, p_count: l.words.length }).catch(() => null);
   if (!r || !r.ok) {
     if (r && r.reason === "notfound" && l.remote) { delete l.remote; saveLists(lists); toast("以前の公開が見つからないので、新しく公開し直してください"); return; }
     toast(reasonText(r && r.reason)); return;
   }
-  l.remote = { id: r.id, code: r.code, vis: res.vis }; l.desc = res.desc; saveLists(lists);
+  l.remote = { id: r.id, code: r.code, vis: res.vis, ...(key ? { key } : {}) }; l.desc = res.desc; saveLists(lists);
   renderMyLists(); renderPubInfo(); tone("ok");
-  navigator.clipboard?.writeText(shareUrl(r.code)).catch(() => {});
+  navigator.clipboard?.writeText(shareUrl(r.code, key)).catch(() => {});
   toast("公開しました（共有URLをコピーしました）", 3200);
 };
 async function unpublish() {
@@ -399,9 +420,9 @@ $("#pickPublic").onclick = (e) => { const b = e.target.closest("[data-code]"); i
 
 $("#codeOpen").onclick = () => {
   const v = $("#codeInput").value.trim(); if (!v) return;
-  let code = v;
-  try { const u = new URL(v); code = u.searchParams.get("list") || v; } catch (e) {}
-  openShared(code);
+  let code = v, key = null;
+  try { const u = new URL(v); code = u.searchParams.get("list") || v; key = new URLSearchParams(u.hash.slice(1)).get("k"); } catch (e) {}
+  openShared(code, null, key);
 };
 $("#browseFile").onclick = () => $("#browseFileInput").click();
 $("#browseFileInput").onchange = async (e) => {
@@ -410,21 +431,27 @@ $("#browseFileInput").onchange = async (e) => {
 };
 
 // 共有コードから開く（パスワードが必要なら聞く）
-export async function openShared(code, password) {
+// パスワードをたずねる（まちがえたときは wrong=true）
+function askPassword(title, wrong) {
+  return modal(`<p class="kicker">PASSWORD</p><h3>🔒 ${esc(title || "パスワード付きのリスト")}</h3>
+    ${wrong ? `<p style="color:var(--warn)">パスワードが違います</p>` : `<p class="hint">開くにはパスワードが必要です。</p>`}
+    <input id="pwIn" type="password" maxlength="64" style="width:100%" autocomplete="off">
+    <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn ghost" data-close>キャンセル</button><button class="btn pri" id="pwGo">開く</button></div>`,
+    (c, close) => { const i = c.querySelector("#pwIn"); setTimeout(() => i.focus(), 50); const go = () => close(i.value); c.querySelector("#pwGo").onclick = go; i.onkeydown = (e) => e.key === "Enter" && go(); });
+}
+
+export async function openShared(code, password, key) {
   const r = await rpc("engdy_list_get", { p_code: code, p_password: password || null }).catch(() => null);
   if (!r) { toast("通信できませんでした"); return; }
   if (!r.ok && (r.reason === "need_password" || r.reason === "wrong_password")) {
-    const pw = await modal(`<p class="kicker">PASSWORD</p><h3>🔒 ${esc(r.title || "パスワード付きのリスト")}</h3>
-      ${r.reason === "wrong_password" ? `<p style="color:var(--warn)">パスワードが違います</p>` : `<p class="hint">このリストを使うにはパスワードが必要です。</p>`}
-      <input id="pwIn" type="password" maxlength="64" style="width:100%" autocomplete="off">
-      <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn ghost" data-close>キャンセル</button><button class="btn pri" id="pwGo">開く</button></div>`,
-      (c, close) => { const i = c.querySelector("#pwIn"); i.focus(); const go = () => close(i.value); c.querySelector("#pwGo").onclick = go; i.onkeydown = (e) => e.key === "Enter" && go(); });
-    if (pw) openShared(code, pw);
+    const pw = await askPassword(r.title, r.reason === "wrong_password");
+    if (pw) openShared(code, pw, key);
     return;
   }
   if (!r.ok) { toast(reasonText(r.reason)); return; }
   let data;
-  try { data = await open(r.payload, password); } catch (e) { toast("リストを復号できませんでした"); return; }
+  if (lockType(r.payload) === "r" && !key) { toast("このリストは「鍵つき」です。共有された URL（# から後ろも全部）で開いてください", 4500); return; }
+  try { data = await open(r.payload, { password, key }); } catch (e) { toast(key ? "鍵が合いません。共有された URL をそのまま使ってください" : "リストを復号できませんでした", 4000); return; }
   const words = parseWords(wordsToText(data.words || []));
   const ok = await modal(`<p class="kicker">SHARED LIST</p><h3>${esc(r.title)}</h3>
     <p class="hint">${esc(r.author)} ・ ${words.length}語${r.description ? "<br>" + esc(r.description) : ""}</p>
@@ -438,14 +465,14 @@ export async function openShared(code, password) {
     lists.unshift({ id: uid(), title: r.title, words, updated: Date.now() }); saveLists(lists);
     toast("自分のリストに保存しました"); if (document.querySelector("#s-browse.active")) renderPickMine();
   }
-  if (ok === "go") startList({ code: r.code, title: r.title, words });
+  if (ok === "go") startList({ code: r.code, key: key || null, title: r.title, words });
 }
 
 // 前回のリストですぐ始める（メイン画面の「次にやること」から）
 export function startLast() {
   const l = S.last; if (!l) return false;
   if (l.id) { const x = loadLists().find((y) => y.id === l.id); if (x) { startList({ id: x.id, title: x.title, words: x.words }); return true; } }
-  if (l.code) { openShared(l.code); return true; }
+  if (l.code) { openShared(l.code, null, l.key || null); return true; }
   return false;
 }
 export const lastListName = () => {
@@ -458,7 +485,7 @@ export const lastListName = () => {
 export async function startList(list) {
   const usable = list.words.filter((x) => x.w);
   if (!usable.length) { toast("単語がありません"); return; }
-  if (list.id || list.code) { S.last = { title: list.title, id: list.id || null, code: list.code || null }; save(); }
+  if (list.id || list.code) { S.last = { title: list.title, id: list.id || null, code: list.code || null, key: list.key || null }; save(); }
   const N = usable.length;
   const full = { title: list.title, words: usable };
   if (N <= 5) { launch(full, usable, null, `${N}語`, !!S.settings.reverse); return; }

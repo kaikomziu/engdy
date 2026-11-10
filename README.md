@@ -1,4 +1,4 @@
-# Engdy（いんぐてぃー） v1.14.0
+# Engdy（いんぐてぃー） v1.15.0
 
 英単語を学んで、定着させる学習アプリ。かるわかGAMES。
 https://kaikomziu.github.io/engdy/
@@ -20,7 +20,7 @@ https://kaikomziu.github.io/engdy/
 ## しくみ
 - 静的サイト（GitHub Pages）。ES Modules、ビルドなし。`js/app.js` が入口。
 - アカウント：かるわかGAMES SDK（`data-game="engdy"`、`engdy_v1` と `engdy_lists` をクラウド同期）。
-- 暗号化（`js/crypto.js`）：JSON → Base64 → AES-256-GCM → `ENGDY1:K:`＋Base64。パスワード付きリストは PBKDF2 でパスワードから鍵を作る（`ENGDY1:P:`）。
+- 暗号化（`js/crypto.js`）：ENGDY2 形式。JSON → gzip → Base64 → AES-256-GCM（ヘッダーを追加認証データにして改ざん検知）。鍵は k＝アプリ鍵（読みにくくするだけ）、p＝パスワード（PBKDF2-SHA256・60万回）、r＝ランダム鍵（URL 限定の共有。鍵は URL の # の後ろだけ）。古い ENGDY1 も読める。
 - Supabase（kifnzvktwbomxthzvvgy）：`engdy_*` テーブル（RLS で全拒否、RPC だけで操作）。メールアドレスと API キーは Vault のマスター鍵で暗号化。
 - Edge Function `engdy-api`（`supabase/functions/engdy-api`）：Gemini と AgentMail の中継。キーはブラウザに出さない。週次メールは pg_cron（`engdy-weekly`）から呼ぶ。
 
