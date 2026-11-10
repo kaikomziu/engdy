@@ -14,7 +14,7 @@ function render() {
   const p = agentProgress();
   const body = $("#agentBody");
   if (!p.ok) {
-    body.innerHTML = `<div class="card unlock-box"><p class="kicker">LOCKED</p><h3>🔒 まだ解放されていません</h3>
+    body.innerHTML = `<div class="card unlock-box"><img class="ill" src="assets/ill/agent-lock.webp" alt="" loading="lazy" decoding="async"><p class="kicker">LOCKED</p><h3>🔒 まだ解放されていません</h3>
       <p>テストモードをもう少しプレイすると、あなたの苦手な単語がわかるようになり、専属エージェントが使えます。</p>
       <p style="margin-top:18px">テストの回答数　${Math.min(p.answers, UNLOCK.answers)} / ${UNLOCK.answers}問</p><div class="meter"><i style="width:${Math.min(100, p.answers / UNLOCK.answers * 100)}%"></i></div>
       <p style="margin-top:10px">テストした単語　${Math.min(p.tested, UNLOCK.words)} / ${UNLOCK.words}語</p><div class="meter"><i style="width:${Math.min(100, p.tested / UNLOCK.words * 100)}%"></i></div>
@@ -102,7 +102,7 @@ const usedIn = (text, w) => new RegExp(`(^|[^a-z])${w.toLowerCase().replace(/[.*
 function renderRoleplay() {
   const el = $("#rpPane"); if (!el) return;
   if (!RP) {
-    el.innerHTML = `<p class="hint" style="margin-top:12px">AI と英語で短い会話をします。覚えた単語を会話の中で使えたら成功です。</p>
+    el.innerHTML = `<img class="ill ill-sm" src="assets/ill/talk.webp" alt="" loading="lazy" decoding="async"><p class="hint" style="margin-top:12px">AI と英語で短い会話をします。覚えた単語を会話の中で使えたら成功です。</p>
       <div class="rp-scenes">${SCENES.map(([id, t, d]) => `<button class="rp-scene" data-sc="${id}"><b>${t}</b><small>${d}</small></button>`).join("")}</div>`;
     $$("[data-sc]", el).forEach((b) => (b.onclick = () => startRp(b.dataset.sc)));
     return;

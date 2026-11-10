@@ -1,4 +1,4 @@
-# Engdy（いんぐてぃー） v1.13.1
+# Engdy（いんぐてぃー） v1.14.0
 
 英単語を学んで、定着させる学習アプリ。かるわかGAMES。
 https://kaikomziu.github.io/engdy/
@@ -25,6 +25,7 @@ https://kaikomziu.github.io/engdy/
 - Edge Function `engdy-api`（`supabase/functions/engdy-api`）：Gemini と AgentMail の中継。キーはブラウザに出さない。週次メールは pg_cron（`engdy-weekly`）から呼ぶ。
 
 ## 素材
+- イラスト：いらすとや（18点。1作品20点までの規約に合わせている）
 - 効果音：OtoLogic（CC BY 4.0）、効果音ラボ
 - 例文：Tatoeba（CC BY 2.0 FR）／類義語：Datamuse API／名言：ZenQuotes.io
 - 発音：Free Dictionary API（dictionaryapi.dev）、録音は Wikimedia Commons（CC BY 3.0 US / CC BY-SA 3.0 など）

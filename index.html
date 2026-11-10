@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Engdy">
-<link rel="stylesheet" href="css/style.css?v=1.13.1">
+<link rel="stylesheet" href="css/style.css?v=1.14.0">
 <script src="https://kaikomziu.github.io/game-links/js/karuwaka-account.js" data-game="engdy" data-keys="engdy_v1,engdy_lists,engdy_memo" data-badge="off"></script>
 </head>
 <body>
@@ -21,6 +21,7 @@
 <!-- ===== ログイン ===== -->
 <section id="s-login" class="screen">
   <div class="login-wrap">
+    <img class="login-ill" src="assets/ill/login.webp" alt="英語の本を読む女の子" loading="lazy" decoding="async">
     <p class="kicker">ENGLISH, EVERY DAY</p>
     <h1 class="logo">Engdy</h1>
     <p class="reading">いんぐてぃー</p>
@@ -52,14 +53,14 @@
     <div class="card quote" id="quoteCard" hidden></div>
     <div class="stampcard card" id="stampCard"></div>
     <nav class="menu">
-      <button class="mitem" data-go="create"><span class="mi-no">01</span><span class="mi-t">リスト制作<small>CREATE</small></span></button>
-      <button class="mitem" data-go="browse"><span class="mi-no">02</span><span class="mi-t">閲覧<small>BROWSE</small></span></button>
-      <button class="mitem" data-go="stats"><span class="mi-no">03</span><span class="mi-t">統計<small>STATS</small></span></button>
-      <button class="mitem" data-go="test"><span class="mi-no">04</span><span class="mi-t">テストモード<small>TEST</small></span></button>
-      <button class="mitem" data-go="agent" id="agentItem"><span class="mi-no">05</span><span class="mi-t">専属エージェント<small>AGENT</small></span><span class="lock" id="agentLock">🔒</span></button>
-      <button class="mitem" data-go="gacha"><span class="mi-no">06</span><span class="mi-t">ガチャ<small>GACHA</small></span></button>
-      <button class="mitem" data-go="memo"><span class="mi-no">07</span><span class="mi-t">自由メモ<small>NOTE</small></span></button>
-      <button class="mitem" data-go="board"><span class="mi-no">08</span><span class="mi-t">掲示板<small>BOARD</small></span></button>
+      <button class="mitem" data-go="create"><img class="mi-ill" src="assets/ill/m-create.webp" alt="" loading="lazy" decoding="async"><span class="mi-no">01</span><span class="mi-t">リスト制作<small>CREATE</small></span></button>
+      <button class="mitem" data-go="browse"><img class="mi-ill" src="assets/ill/m-browse.webp" alt="" loading="lazy" decoding="async"><span class="mi-no">02</span><span class="mi-t">閲覧<small>BROWSE</small></span></button>
+      <button class="mitem" data-go="stats"><img class="mi-ill" src="assets/ill/m-stats.webp" alt="" loading="lazy" decoding="async"><span class="mi-no">03</span><span class="mi-t">統計<small>STATS</small></span></button>
+      <button class="mitem" data-go="test"><img class="mi-ill" src="assets/ill/m-test.webp" alt="" loading="lazy" decoding="async"><span class="mi-no">04</span><span class="mi-t">テストモード<small>TEST</small></span></button>
+      <button class="mitem" data-go="agent" id="agentItem"><img class="mi-ill" src="assets/ill/m-agent.webp" alt="" loading="lazy" decoding="async"><span class="mi-no">05</span><span class="mi-t">専属エージェント<small>AGENT</small></span><span class="lock" id="agentLock">🔒</span></button>
+      <button class="mitem" data-go="gacha"><img class="mi-ill" src="assets/ill/m-gacha.webp" alt="" loading="lazy" decoding="async"><span class="mi-no">06</span><span class="mi-t">ガチャ<small>GACHA</small></span></button>
+      <button class="mitem" data-go="memo"><img class="mi-ill" src="assets/ill/m-memo.webp" alt="" loading="lazy" decoding="async"><span class="mi-no">07</span><span class="mi-t">自由メモ<small>NOTE</small></span></button>
+      <button class="mitem" data-go="board"><img class="mi-ill" src="assets/ill/m-board.webp" alt="" loading="lazy" decoding="async"><span class="mi-no">08</span><span class="mi-t">掲示板<small>BOARD</small></span></button>
     </nav>
     <div class="quick-links">
       <button class="qlink" data-go="ranking"><span>🏆</span>ランキング</button>
@@ -161,7 +162,7 @@
     <button class="btn pri" id="vNext">次へ ▶</button>
   </div>
   <div class="idle" id="idleBox" hidden>
-    <div class="card"><p class="kicker">PAUSED</p><h3>一時停止中</h3><p>しばらく操作がなかったので止めました。<br>放置していた時間は記録に入りません。</p><button class="btn pri" id="idleResume">続ける</button></div>
+    <div class="card"><img class="ill" src="assets/ill/idle.webp" alt="" loading="lazy" decoding="async"><p class="kicker">PAUSED</p><h3>一時停止中</h3><p>しばらく操作がなかったので止めました。<br>放置していた時間は記録に入りません。</p><button class="btn pri" id="idleResume">続ける</button></div>
   </div>
 </section>
 
@@ -265,10 +266,11 @@
         <dt>例文</dt><dd>Tatoeba（CC BY 2.0 FR）</dd>
         <dt>類義語</dt><dd>Datamuse API</dd>
         <dt>名言</dt><dd>ZenQuotes.io</dd>
+        <dt>イラスト</dt><dd>いらすとや</dd>
         <dt>BGM</dt><dd>ふぁいの音楽置き場（fai-musics）<br>「ほっこりひととき」「静かな図書室で」「おひるすぎ」「黄昏メロウノート」「なんだっけ？」「ゆううつ雨模様」<br>MusMus（watson）「ひとやすみ」「Lightning Brain」<br>DOVA-SYNDROME しゃろう「2:23 AM」</dd>
       </dl>
       <p class="hint">お問い合わせ：掲示板の「質問」、またはメール karubiwakame★gmail.com（★→@）でも受け付けています。</p>
-      <p class="hint">バージョン <span class="ver">v1.13.1</span></p>
+      <p class="hint">バージョン <span class="ver">v1.14.0</span></p>
     </div>
   </div>
 </section>
@@ -309,7 +311,7 @@
 <div id="modal" class="modal" hidden><div class="modal-card card" id="modalCard"></div></div>
 <div id="toast" class="toast" hidden></div>
 
-<script type="importmap">{"imports":{"./js/agent.js":"./js/agent.js?v=1.13.1","./js/api.js":"./js/api.js?v=1.13.1","./js/app.js":"./js/app.js?v=1.13.1","./js/audio.js":"./js/audio.js?v=1.13.1","./js/changelog.js":"./js/changelog.js?v=1.13.1","./js/crypto.js":"./js/crypto.js?v=1.13.1","./js/gacha.js":"./js/gacha.js?v=1.13.1","./js/items.js":"./js/items.js?v=1.13.1","./js/lists.js":"./js/lists.js?v=1.13.1","./js/router.js":"./js/router.js?v=1.13.1","./js/stats.js":"./js/stats.js?v=1.13.1","./js/store.js":"./js/store.js?v=1.13.1","./js/test.js":"./js/test.js?v=1.13.1","./js/util.js":"./js/util.js?v=1.13.1","./js/view.js":"./js/view.js?v=1.13.1","./js/memo.js":"./js/memo.js?v=1.13.1","./js/sample.js":"./js/sample.js?v=1.13.1","./js/pwa.js":"./js/pwa.js?v=1.13.1","./js/voice.js":"./js/voice.js?v=1.13.1","./js/speech.js":"./js/speech.js?v=1.13.1","./js/social.js":"./js/social.js?v=1.13.1","./js/board.js":"./js/board.js?v=1.13.1"}}</script>
-<script type="module" src="js/app.js?v=1.13.1"></script>
+<script type="importmap">{"imports":{"./js/agent.js":"./js/agent.js?v=1.14.0","./js/api.js":"./js/api.js?v=1.14.0","./js/app.js":"./js/app.js?v=1.14.0","./js/audio.js":"./js/audio.js?v=1.14.0","./js/changelog.js":"./js/changelog.js?v=1.14.0","./js/crypto.js":"./js/crypto.js?v=1.14.0","./js/gacha.js":"./js/gacha.js?v=1.14.0","./js/items.js":"./js/items.js?v=1.14.0","./js/lists.js":"./js/lists.js?v=1.14.0","./js/router.js":"./js/router.js?v=1.14.0","./js/stats.js":"./js/stats.js?v=1.14.0","./js/store.js":"./js/store.js?v=1.14.0","./js/test.js":"./js/test.js?v=1.14.0","./js/util.js":"./js/util.js?v=1.14.0","./js/view.js":"./js/view.js?v=1.14.0","./js/memo.js":"./js/memo.js?v=1.14.0","./js/sample.js":"./js/sample.js?v=1.14.0","./js/pwa.js":"./js/pwa.js?v=1.14.0","./js/voice.js":"./js/voice.js?v=1.14.0","./js/speech.js":"./js/speech.js?v=1.14.0","./js/social.js":"./js/social.js?v=1.14.0","./js/board.js":"./js/board.js?v=1.14.0"}}</script>
+<script type="module" src="js/app.js?v=1.14.0"></script>
 </body>
 </html>

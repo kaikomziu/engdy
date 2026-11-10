@@ -36,7 +36,7 @@ const RULES = `<ol class="rules">
 
 async function needRules() {
   if (S.boardRules === RULES_V) return true;
-  const ok = await modal(`<p class="kicker">BOARD RULES</p><h3>📌 掲示板のルール</h3>
+  const ok = await modal(`<img class="ill" src="assets/ill/board-rules.webp" alt="" loading="lazy" decoding="async"><p class="kicker">BOARD RULES</p><h3>📌 掲示板のルール</h3>
     <p>みんなが気持ちよく使えるように、次のルールを守ってください。</p>${RULES}
     <label class="radio"><input type="checkbox" id="rlAgree"><span><b>ルールを読んで、守ることに同意します</b></span></label>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" data-close>同意しない</button><button class="btn pri" id="rlOk" disabled>同意して入る</button></div>`,

@@ -18,7 +18,7 @@ import { renderQuote, notify, testDiscord, DISCORD_EVENTS, pushRank, leaveRank }
 import { renderBoardAdmin, showRules } from "./board.js";
 import { initPwa, install, canInstall, isStandalone, isIOS, onPwaChange, cacheMusic, musicCached, clearMusic, musicTotal } from "./pwa.js";
 
-export const VERSION = "1.13.1";
+export const VERSION = "1.14.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -135,7 +135,7 @@ function renderInstall() {
 function welcome() {
   if (S.welcomed) return;
   S.welcomed = true; save();
-  modal(`<p class="kicker">WELCOME</p><h3>Engdy へようこそ！</h3>
+  modal(`<img class="ill" src="assets/ill/welcome.webp" alt="" loading="lazy" decoding="async"><p class="kicker">WELCOME</p><h3>Engdy へようこそ！</h3>
     <ol class="steps">
       <li><b>リストを作る</b><span>覚えたい単語を1行に1つ。サンプルも入っています。</span></li>
       <li><b>閲覧する</b><span>単語 → 意味 の順に、数秒ずつ見ていきます。毎日1周でスタンプ。</span></li>

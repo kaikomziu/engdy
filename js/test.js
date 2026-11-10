@@ -21,12 +21,12 @@ function renderStart() {
   const pool = testPool();
   const p = agentProgress();
   if (pool.length < 4) {
-    $("#testBody").innerHTML = `<div class="card t-start"><p class="kicker">NOT YET</p><h3>まだテストできません</h3>
+    $("#testBody").innerHTML = `<div class="card t-start"><img class="ill" src="assets/ill/test-bad.webp" alt="" loading="lazy" decoding="async"><p class="kicker">NOT YET</p><h3>まだテストできません</h3>
       <p>テストには、閲覧で見た（意味のある）単語が4つ以上必要です。<br>いま：${pool.length}語</p>
       <button class="btn pri" data-go="browse">閲覧へ</button></div>`;
     return;
   }
-  $("#testBody").innerHTML = `<div class="card t-start"><p class="kicker">READY</p><h3>テストを始める</h3>
+  $("#testBody").innerHTML = `<div class="card t-start"><img class="ill ill-sm" src="assets/ill/test-start.webp" alt="" loading="lazy" decoding="async"><p class="kicker">READY</p><h3>テストを始める</h3>
     <p class="hint">閲覧で見た ${pool.length}語 から出題します。間違えた単語ほど、よく出ます。</p>
     <div class="t-opts">
       <div class="seg" id="optN">${[10, 20, 30].map((n) => `<button data-n="${n}" class="${opt.n === n ? "on" : ""}">${n}問</button>`).join("")}</div>
@@ -269,7 +269,7 @@ function finish() {
   const rate = Math.round((T.correct / T.qs.length) * 100);
   const uniqWrong = [...new Map(T.wrong.map((x) => [x.w, x])).values()];
   const p = agentProgress();
-  $("#testBody").innerHTML = `<div class="card t-start"><p class="kicker">RESULT</p>
+  $("#testBody").innerHTML = `<div class="card t-start"><img class="ill" src="assets/ill/${rate >= 70 ? "test-good" : "test-bad"}.webp" alt=""><p class="kicker">RESULT</p>
     <h3>${T.score}点 ${best ? `<span class="badge">ベスト更新</span>` : ""}</h3>
     <div class="done-stats"><div><small>正解</small><b>${T.correct} / ${T.qs.length}</b></div><div><small>正答率</small><b>${rate}%</b></div><div><small>最大コンボ</small><b>${T.maxCombo}</b></div></div>
     ${uniqWrong.length ? `<h3 class="sec" style="text-align:left">まちがえた単語</h3><table class="wtable">${uniqWrong.map((x) => `<tr><td>${esc(x.w)}</td><td>${esc(x.m)}</td></tr>`).join("")}</table>` : `<div class="gain">全問正解！ 🎉</div>`}

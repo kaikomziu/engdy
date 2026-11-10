@@ -210,7 +210,7 @@ function finish() {
   const done = V; stop(); V = null;
   tone(lap.stamped ? "stamp" : "ok");
   const partial = done.words.length < done.src.words.length;
-  $("#viewDone").innerHTML = `<p class="kicker">LAP COMPLETE</p><h3>${esc(done.title)} ${partial ? `${done.words.length}語 完了` : "を1周しました"}</h3>${done.label ? `<p class="hint">${esc(done.label)}</p>` : ""}
+  $("#viewDone").innerHTML = `<img class="ill" src="assets/ill/done.webp" alt="" loading="lazy" decoding="async"><p class="kicker">LAP COMPLETE</p><h3>${esc(done.title)} ${partial ? `${done.words.length}語 完了` : "を1周しました"}</h3>${done.label ? `<p class="hint">${esc(done.label)}</p>` : ""}
     <div class="done-stats"><div><small>単語</small><b>${done.words.length}</b></div><div><small>学習時間</small><b>${fmtDuration(done.seconds)}</b></div><div><small>今日の合計</small><b>${fmtDuration(today().s)}</b></div></div>
     ${lap.stamped ? `<div class="gain">🎉 今日のスタンプを押しました！ 💎 +${lap.gained}${lap.cardDone ? "<br>スタンプカードがいっぱいになりました（ボーナス込み）" : ""}</div>`
       : lap.tooShort ? `<p class="hint">スタンプは ${MIN_WORDS_FOR_STAMP}語以上やり終えるともらえます。</p>` : `<p class="hint">今日のスタンプは押してあります。また明日！</p>`}
