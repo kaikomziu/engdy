@@ -1,6 +1,6 @@
 // 掲示板：勉強している人どうしで話せる場所。読むのはだれでも、書くのはログインした人だけ
 // 入る前にルールへの同意が必要。個人情報・リンク・ひどい言葉はサーバーではじき、3人に通報されると自動で隠れる
-import { $, $$, esc, toast, modal, confirmBox } from "./util.js";
+import { $, $$, esc, toast, modal, confirmBox, skel } from "./util.js";
 import { S, save } from "./store.js";
 import { rpc, token, me, reasonText } from "./api.js";
 import { go, onEnter } from "./router.js";
@@ -78,7 +78,7 @@ function renderShell() {
 
 async function load(reset) {
   if (loading) return; loading = true;
-  if (reset) { posts = []; $("#bdList").innerHTML = `<p class="empty"><span class="spinner"></span></p>`; }
+  if (reset) { posts = []; $("#bdList").innerHTML = `<div class="card">${skel("lines", 3)}</div><div class="card">${skel("lines", 2)}</div><div class="card">${skel("lines", 3)}</div>`; }
   const before = !reset && posts.length ? posts[posts.length - 1].created_at : null;
   const r = await rpc("engdy_board_list", { p_cat: cat || null, p_before: before, p_token: token() }).catch(() => null);
   loading = false;
@@ -119,7 +119,7 @@ function bindCards(el) {
 // ================= 1つの投稿（返信つき） =================
 async function openPost(id) {
   openId = id;
-  $("#boardBody").innerHTML = `<button class="btn sm ghost" id="bdBack">← 一覧へ</button><div id="bdDetail"><p class="empty"><span class="spinner"></span></p></div>`;
+  $("#boardBody").innerHTML = `<button class="btn sm ghost" id="bdBack">← 一覧へ</button><div id="bdDetail"><div class="card">${skel("lines", 4)}</div></div>`;
   $("#bdBack").onclick = () => { openId = null; renderShell(); renderList(); };
   scrollTo(0, 0);
   const r = await rpc("engdy_board_get", { p_id: id, p_token: token() }).catch(() => null);

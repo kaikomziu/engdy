@@ -23,6 +23,16 @@ export function fmtDuration(sec) {
 export const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// ================= 読み込み中の仮の表示（スケルトン） =================
+// kind：list（一覧の行）・lines（文章）・msg（チャットの返事）・choices（4択）
+export function skel(kind = "lines", n = 3) {
+  const w = (i) => [92, 78, 85, 64, 88, 70][i % 6];
+  if (kind === "list") return Array.from({ length: n }, () => `<li class="sk-row" aria-hidden="true"><i class="sk sk-ic"></i><span class="sk-col"><i class="sk" style="width:55%"></i><i class="sk sk-s" style="width:35%"></i></span></li>`).join("");
+  if (kind === "choices") return `<div class="choices" aria-hidden="true">${Array.from({ length: 4 }, () => `<i class="sk sk-btn"></i>`).join("")}</div>`;
+  if (kind === "msg") return `<div class="msg model wait sk-msg" aria-label="考えています">${Array.from({ length: n }, (_, i) => `<i class="sk" style="width:${w(i)}%"></i>`).join("")}</div>`;
+  return `<div class="sk-lines" aria-label="読み込み中">${Array.from({ length: n }, (_, i) => `<i class="sk" style="width:${w(i)}%"></i>`).join("")}</div>`;
+}
+
 let toastTimer;
 export function toast(msg, ms = 2400) {
   const t = $("#toast");

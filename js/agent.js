@@ -1,5 +1,5 @@
 // 専属エージェント：テストの記録から苦手な単語を見つけて、Gemini と予習する
-import { $, $$, esc, miniMarkdown, toast, speak, dayKey, addDays } from "./util.js";
+import { $, $$, esc, miniMarkdown, toast, speak, dayKey, addDays, skel } from "./util.js";
 import { S, save, weakWords, agentProgress, UNLOCK, testPool } from "./store.js";
 import { fn, token, reasonText } from "./api.js";
 import { onEnter } from "./router.js";
@@ -65,7 +65,7 @@ function renderChat(waiting) {
   const h = S.agent.history;
   $("#chat").innerHTML = (h.length ? h.map((m) => `<div class="msg ${m.role}">${m.role === "model" ? miniMarkdown(m.text) : esc(m.label || m.text)}</div>`).join("")
     : `<div class="msg model"><p>こんにちは！ あなた専属のエージェントです。</p><p>テストの記録から、苦手な単語を見つけました。上のボタンで予習を始めるか、なんでも質問してください。</p></div>`)
-    + (waiting ? `<div class="msg model wait"><span class="spinner"></span> 考えています…</div>` : "");
+    + (waiting ? skel("msg", 3) : "");
   const c = $("#chat"); c.scrollTop = c.scrollHeight;
 }
 
@@ -113,7 +113,7 @@ function renderRoleplay() {
     <div class="chat" id="rpChat">${RP.msgs.map((m) => m.role === "user"
       ? `<div class="msg user">${esc(m.text)}</div>${m.fb ? `<div class="rp-fb">💡 ${esc(m.fb)}</div>` : ""}`
       : `<div class="msg model rp-model"><p>${esc(m.text)} <button class="rp-say" data-say="${esc(m.text)}" title="読み上げ">🔊</button></p><p class="rp-ja" hidden>${esc(m.ja)}</p><button class="link rp-jabtn">和訳</button></div>`).join("")}
-      ${busy ? `<div class="msg model wait"><span class="spinner"></span> …</div>` : ""}</div>
+      ${busy ? skel("msg", 2) : ""}</div>
     <div class="chat-input"><input class="grow" id="rpIn" maxlength="400" placeholder="英語で返事をしよう" autocapitalize="off" spellcheck="true"><button class="btn pri" id="rpSend">送る</button></div>
     <p class="hint">日本語で書いても大丈夫ですが、英語で書くと練習になります。1回の送信で AI を1回使います。</p>`;
   const c = $("#rpChat"); c.scrollTop = c.scrollHeight;

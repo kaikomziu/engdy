@@ -1,5 +1,5 @@
 // リスト制作（作る・保存・.engdy・公開）と、閲覧のリスト選び
-import { $, $$, esc, toast, modal, confirmBox, download, readFile, shuffle } from "./util.js";
+import { $, $$, esc, toast, modal, confirmBox, download, readFile, shuffle, skel } from "./util.js";
 import { S, save, loadLists, saveLists, parseWords, wordsToText, parseTable } from "./store.js";
 import { rpc, fn, token, reasonText } from "./api.js";
 import { seal, sealWithNewKey, open, lockType } from "./crypto.js";
@@ -27,21 +27,66 @@ export function addSample() {
 // ================= リスト制作 =================
 onEnter("create", () => { lists = loadLists(); if (!cur()) curId = lists[0] ? lists[0].id : null; fillEditor(); renderMyLists(); });
 
-// 並べ替え・検索
+// 検索から、そのリストを編集画面で開く
+export function editList(id) {
+  lists = loadLists();
+  if (!lists.some((l) => l.id === id)) return;
+  if (document.querySelector("#s-create.active")) { flushAuto(); curId = id; fillEditor(); renderMyLists(); return; }
+  curId = id; go("create");
+}
+
+// リストごとの習熟度：覚えた語（テストで正解のほうが多い）・苦手な語（まちがいのほうが多い）・見ただけの語
+export function listStats(l) {
+  let seen = 0, mast = 0, weak = 0;
+  for (const x of l.words) {
+    const r = S.words[x.w];
+    if (!r || !(r.seen || r.ok || r.ng)) continue;
+    seen++;
+    if (r.ng > r.ok) weak++; else if (r.ok >= 1) mast++;
+  }
+  const n = l.words.length || 1;
+  return { seen, mast, weak, pct: Math.round(((mast + (seen - mast - weak) * 0.4) / n) * 100) };
+}
+const lastStudied = (l) => (S.listSeen && S.listSeen[l.id]) || 0;
+
+// 並べ替え・絞り込み・検索
 function view(listArr, q) {
   q = (q || "").trim().toLowerCase();
   let a = listArr.filter((l) => !q || l.title.toLowerCase().includes(q) || l.words.some((x) => x.w.toLowerCase() === q));
+  const f = S.settings.listFilter || "all";
+  if (f !== "all") a = a.filter((l) => { const s = listStats(l); return f === "weak" ? s.weak > 0 : f === "new" ? s.seen === 0 : f === "todo" ? s.pct < 80 : f === "pub" ? !!l.remote : true; });
   const mode = S.settings.listSort || "updated";
-  a = a.slice().sort(mode === "name" ? (x, y) => x.title.localeCompare(y.title, "ja") : mode === "count" ? (x, y) => y.words.length - x.words.length : (x, y) => (y.updated || 0) - (x.updated || 0));
-  return a;
+  const st = new Map(a.map((l) => [l.id, listStats(l)]));
+  const cmp = {
+    name: (x, y) => x.title.localeCompare(y.title, "ja"),
+    count: (x, y) => y.words.length - x.words.length,
+    recent: (x, y) => lastStudied(y) - lastStudied(x) || (y.updated || 0) - (x.updated || 0),
+    weak: (x, y) => st.get(y.id).weak - st.get(x.id).weak || st.get(x.id).pct - st.get(y.id).pct,
+    mastery: (x, y) => st.get(x.id).pct - st.get(y.id).pct,
+  }[mode] || ((x, y) => (y.updated || 0) - (x.updated || 0));
+  return a.slice().sort(cmp);
 }
-const sortOpts = () => [["updated", "更新順"], ["name", "名前順"], ["count", "語数順"]].map(([v, t]) => `<option value="${v}" ${S.settings.listSort === v ? "selected" : ""}>${t}</option>`).join("");
-export function bindListTools(searchSel, sortSel, rerender) {
-  const sr = $(searchSel), so = $(sortSel);
-  so.innerHTML = sortOpts();
+const SORTS = [["updated", "更新順"], ["recent", "最近学習した順"], ["weak", "苦手が多い順"], ["mastery", "習熟度が低い順"], ["name", "名前順"], ["count", "語数順"]];
+const FILTERS = [["all", "すべて"], ["weak", "苦手あり"], ["new", "まだ学習していない"], ["todo", "覚えきっていない"], ["pub", "公開中"]];
+const opts = (arr, v) => arr.map(([k, t]) => `<option value="${k}" ${v === k ? "selected" : ""}>${t}</option>`).join("");
+export function bindListTools(searchSel, sortSel, rerender, filterSel) {
+  const sr = $(searchSel), so = $(sortSel), fi = filterSel && $(filterSel);
+  so.innerHTML = opts(SORTS, S.settings.listSort || "updated");
   sr.oninput = rerender;
   so.onchange = () => { S.settings.listSort = so.value; save(); document.querySelectorAll(".list-sort").forEach((x) => (x.value = so.value)); rerender(); };
+  if (fi) {
+    fi.innerHTML = opts(FILTERS, S.settings.listFilter || "all");
+    fi.onchange = () => { S.settings.listFilter = fi.value; save(); document.querySelectorAll(".list-filter").forEach((x) => (x.value = fi.value)); rerender(); };
+  }
 }
+// いつ学習したか（「3日前」など）
+function ago(t) {
+  if (!t) return "まだ学習していません";
+  const d = Math.floor((Date.now() - t) / 864e5);
+  return d <= 0 ? "今日学習" : d === 1 ? "昨日学習" : d < 30 ? `${d}日前に学習` : `${Math.floor(d / 30)}か月前に学習`;
+}
+// タイトルから表紙の色を決める（いつも同じ色になる）
+function coverHue(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.codePointAt(0)) % 360; return h; }
 
 function renderMyLists() {
   const shown = view(lists, $("#mySearch").value);
@@ -49,7 +94,7 @@ function renderMyLists() {
     ? shown.map((l) => `<li data-id="${l.id}" class="${l.id === curId ? "on" : ""}"><b>${esc(l.title || "（無題）")}</b><small>${l.words.length}語${l.remote ? ` ・ <span class="badge ${l.remote.vis === "password" ? "pw" : l.remote.vis === "url" ? "url" : ""}">${VIS[l.remote.vis]}</span>` : ""}</small></li>`).join("")
     : `<li class="empty" style="cursor:default">${lists.length ? "見つかりません" : "まだリストがありません"}</li>`;
 }
-bindListTools("#mySearch", "#mySort", () => renderMyLists());
+bindListTools("#mySearch", "#mySort", () => renderMyLists(), "#myFilter");
 $("#myLists").onclick = (e) => {
   const li = e.target.closest("li[data-id]"); if (!li) return;
   flushAuto();
@@ -73,10 +118,68 @@ function renderPreview() {
   const words = parseWords($("#listWords").value);
   const miss = words.filter((x) => !x.m).length;
   $("#parseInfo").textContent = words.length ? `${words.length}語${miss ? ` ・ 意味なし ${miss}語` : ""}` : "";
+  // 表のマスをタップすると、その場で直せる（直したら上の欄にも反映）
+  const cell = (i, k, v, ph) => `<td contenteditable="plaintext-only" spellcheck="false" data-i="${i}" data-k="${k}" data-ph="${ph}" class="${v ? "" : "miss"}">${esc(v)}</td>`;
   $("#listPreview").innerHTML = words.length
-    ? `<table>${words.slice(0, 300).map((x) => `<tr><td>${esc(x.w)}</td><td class="${x.m ? "" : "miss"}">${x.m ? esc(x.m) : "意味なし"}</td></tr>`).join("")}</table>${words.length > 300 ? `<p class="hint">…ほか ${words.length - 300}語</p>` : ""}`
+    ? `<p class="hint pv-hint">✏️ 表のマスをタップすると、その場で直せます</p><table class="pv-edit">${words.slice(0, 300).map((x, i) => `<tr>${cell(i, "w", x.w, "英語")}${cell(i, "m", x.m, "意味なし")}<td class="pv-del"><button class="btn sm ghost" data-del="${i}" aria-label="この行を消す" title="この行を消す">✕</button></td></tr>`).join("")}
+      <tr class="pv-new">${cell("new", "w", "", "＋ 英語を追加")}${cell("new", "m", "", "意味")}<td></td></tr></table>${words.length > 300 ? `<p class="hint">…ほか ${words.length - 300}語（301語目からは、上の欄で直してください）</p>` : ""}`
     : "";
 }
+// 表で直した内容を、上の欄（テキスト）に書き戻す
+function commitCell(td) {
+  const words = parseWords($("#listWords").value);
+  const v = td.textContent.replace(/\s+/g, " ").trim(), k = td.dataset.k;
+  if (td.dataset.i === "new") {
+    const row = td.closest("tr"), w = row.querySelector('[data-k="w"]').textContent.trim(), m = row.querySelector('[data-k="m"]').textContent.trim();
+    if (!w) return false;
+    words.push({ w, m });
+  } else {
+    const i = +td.dataset.i, x = words[i]; if (!x) return false;
+    if ((x[k] || "") === v) { td.textContent = v; return false; }
+    if (k === "w" && !v) words.splice(i, 1);
+    else {
+      // 1つのマスを直しただけなら、表は作り直さない（次のマスに移ったカーソルを消さないため）
+      x[k] = v; td.textContent = v; td.classList.toggle("miss", !v);
+      $("#listWords").value = wordsToText(words);
+      const miss = words.filter((y) => !y.m).length;
+      $("#parseInfo").textContent = `${words.length}語${miss ? ` ・ 意味なし ${miss}語` : ""}`;
+      autosave();
+      return true;
+    }
+  }
+  $("#listWords").value = wordsToText(words);
+  renderPreview(); autosave();
+  return "rebuilt";
+}
+$("#listPreview").addEventListener("focusout", (e) => {
+  const td = e.target.closest("td[data-k]"); if (!td) return;
+  // 「追加」の行は、英語と意味の両方を書き終えて行から出たときに足す
+  if (td.dataset.i === "new" && e.relatedTarget && td.closest("tr").contains(e.relatedTarget)) return;
+  const to = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("td[data-k]");
+  const dest = to ? { i: to.dataset.i, k: to.dataset.k } : null;
+  if (commitCell(td) === "rebuilt" && dest) { const n = $(`#listPreview td[data-i="${dest.i}"][data-k="${dest.k}"]`); if (n) n.focus(); }
+});
+$("#listPreview").addEventListener("keydown", (e) => {
+  const td = e.target.closest("td[data-k]"); if (!td || e.isComposing) return;
+  if (e.key === "Enter") {
+    e.preventDefault();
+    // Enter：英語のマスなら意味へ、意味のマスなら次の行の英語へ
+    const row = td.closest("tr"), nextTd = td.dataset.k === "w" ? row.querySelector('[data-k="m"]') : null;
+    if (nextTd) { nextTd.focus(); return; }
+    const isNew = td.dataset.i === "new", idx = isNew ? -1 : +td.dataset.i;
+    td.blur();
+    const target = isNew ? $('#listPreview tr.pv-new td[data-k="w"]') : $(`#listPreview td[data-i="${idx + 1}"][data-k="w"]`) || $('#listPreview tr.pv-new td[data-k="w"]');
+    if (target) target.focus();
+  } else if (e.key === "Escape") { td.blur(); }
+});
+$("#listPreview").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-del]"); if (!b) return;
+  const words = parseWords($("#listWords").value);
+  const x = words.splice(+b.dataset.del, 1)[0];
+  $("#listWords").value = wordsToText(words);
+  renderPreview(); autosave();
+  if (x) toast(`「${x.w}」を消しました`);
+});
 function renderPubInfo() {
   const l = cur();
   $("#pubInfo").innerHTML = l && l.remote
@@ -391,13 +494,24 @@ $("#browseTabs").onclick = (e) => {
 };
 function renderPickMine() {
   const shown = view(lists, $("#pickSearch").value);
+  // カード：表紙の色・語数・最後に学習した日・習熟度のリング
   $("#pickMine").innerHTML = shown.length
-    ? shown.map((l) => `<li><div class="pk-main"><b>${esc(l.title)}</b><small>${l.words.length}語</small></div><button class="btn pri sm" data-start="${l.id}">開始</button></li>`).join("")
+    ? shown.map((l) => {
+        const s = listStats(l), h = coverHue(l.title), ini = (l.title.match(/[A-Za-z0-9]|[^\s\p{P}]/u) || ["?"])[0].toUpperCase();
+        return `<li class="lcard" data-start="${l.id}" style="--h:${h}" tabindex="0" role="button" aria-label="${esc(l.title)} を始める">
+          <div class="lc-cover"><span>${esc(ini)}</span>${l.remote ? `<em class="lc-pub" title="公開中">🌐</em>` : ""}</div>
+          <div class="lc-body"><b>${esc(l.title)}</b><small>${l.words.length}語 ・ ${ago(lastStudied(l))}</small>
+            <small class="lc-tags">${s.mast ? `<span class="lt ok">覚えた ${s.mast}</span>` : ""}${s.weak ? `<span class="lt ng">苦手 ${s.weak}</span>` : ""}${!s.seen ? `<span class="lt">NEW</span>` : ""}</small></div>
+          <div class="lc-side"><div class="ring" style="--p:${s.pct}" title="習熟度 ${s.pct}%"><span>${s.pct}<small>%</small></span></div>
+            <button class="btn sm ghost lc-edit" data-edit="${l.id}" aria-label="編集">✏️</button></div></li>`;
+      }).join("")
     : lists.length ? `<li class="empty" style="border:none">見つかりません</li>` : `<li class="empty" style="border:none">まだリストがありません。<br><span class="row" style="justify-content:center;margin-top:8px"><button class="btn sm" data-go="create">リストを作る</button><button class="btn sm pri" id="addSampleB">サンプルを入れる</button></span></li>`;
 }
-bindListTools("#pickSearch", "#pickSort", () => renderPickMine());
+bindListTools("#pickSearch", "#pickSort", () => renderPickMine(), "#pickFilter");
 $("#pickMine").addEventListener("click", (e) => { if (e.target.closest("#addSampleB")) { addSample(); lists = loadLists(); renderPickMine(); toast("サンプルの単語リスト（150語）を入れました"); } });
+$("#pickMine").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches(".lcard")) { e.preventDefault(); e.target.click(); } });
 $("#pickMine").onclick = (e) => {
+  const ed = e.target.closest("[data-edit]"); if (ed) { editList(ed.dataset.edit); return; }
   const b = e.target.closest("[data-start]"); if (!b) return;
   const l = lists.find((x) => x.id === b.dataset.start);
   if (l) startList({ id: l.id, title: l.title, words: l.words });
@@ -405,7 +519,7 @@ $("#pickMine").onclick = (e) => {
 
 async function loadPublic() {
   const ul = $("#pickPublic");
-  ul.innerHTML = `<li class="empty" style="border:none"><span class="spinner"></span></li>`;
+  ul.innerHTML = skel("list", 5);
   const r = await rpc("engdy_list_browse", { p_q: $("#pubSearch").value.trim() || null, p_limit: 100 }).catch(() => null);
   if (!Array.isArray(r)) { ul.innerHTML = `<li class="empty" style="border:none">読み込めませんでした</li>`; return; }
   ul.innerHTML = r.length ? r.map((l) => `<li><div class="pk-main"><b>${l.visibility === "password" ? "🔒 " : ""}${esc(l.title)}</b>
@@ -486,6 +600,7 @@ export async function startList(list) {
   const usable = list.words.filter((x) => x.w);
   if (!usable.length) { toast("単語がありません"); return; }
   if (list.id || list.code) { S.last = { title: list.title, id: list.id || null, code: list.code || null, key: list.key || null }; save(); }
+  if (list.id) { S.listSeen = { ...(S.listSeen || {}), [list.id]: Date.now() }; save(); }   // 「◯日前に学習」用
   const N = usable.length;
   const full = { title: list.title, words: usable };
   if (N <= 5) { launch(full, usable, null, `${N}語`, !!S.settings.reverse); return; }

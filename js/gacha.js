@@ -15,6 +15,8 @@ const DARK_THEMES = ["sumi", "midnight"];
 export const isDarkMode = () => { const m = S.settings.mode || "light"; return m === "dark" || (m === "auto" && matchMedia("(prefers-color-scheme: dark)").matches); };
 try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if ((S.settings.mode || "light") === "auto") applySkin(); }); } catch (e) {}
 
+// 設定で選べるアクセントカラー（"" はテーマの色のまま）
+export const ACCENTS = [["", "テーマの色"], ["#2f6f5e", "深緑"], ["#2a7f86", "青緑"], ["#2f5f8f", "藍"], ["#5a55b0", "すみれ"], ["#8a4fa0", "紫"], ["#c0428a", "桃"], ["#b5543c", "れんが"], ["#c07a1f", "山吹"], ["#4b5560", "墨"]];
 export function applySkin() {
   const th = byId("theme", S.equip.theme) || THEMES[0];
   const root = document.documentElement;
@@ -34,8 +36,15 @@ export function applySkin() {
   } else {
     for (const [k, v] of Object.entries(th.v)) root.style.setProperty(k, v);
   }
+  // 自分で選んだアクセントカラー（テーマより優先）。ダークでは少し明るくして読みやすくする
+  const ac = S.settings.accentColor;
+  if (ac && ACCENTS.some((a) => a[0] === ac)) {
+    const c = dark ? `color-mix(in srgb, ${ac} 72%, #fff)` : ac;
+    root.style.setProperty("--accent", c);
+    root.style.setProperty("--accent-soft", `color-mix(in srgb, ${c} ${dark ? 22 : 14}%, var(--paper))`);
+  }
   root.dataset.mode = dark ? "dark" : "light";
-  const mb = document.querySelector("#modeBtn"); if (mb) mb.textContent = dark ? "☀️" : "🌙";
+  const mb =document.querySelector("#modeBtn"); if (mb) mb.textContent = dark ? "☀️" : "🌙";
   const bg = byId("bg", S.equip.bg) || BGS[0];
   const layer = $("#bgLayer");
   layer.style.background = bg.css === "none" ? "none" : bg.css;

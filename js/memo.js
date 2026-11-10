@@ -41,9 +41,10 @@ function persist() {
 const page = () => M.pages[M.cur];
 
 // ================= 画面 =================
-onEnter("memo", () => {
+onEnter("memo", (arg) => {
   M = load();
-  if (M.cur >= M.pages.length) M.cur = 0;
+  if (arg && Number.isInteger(arg.page)) M.cur = arg.page;   // 検索から開いたページ
+  if (M.cur >= M.pages.length || M.cur < 0) M.cur = 0;
   buildToolbar();
   fit(); renderPage();
 });

@@ -1,5 +1,5 @@
 // みんなとつながる機能：今日の名言・Discord への報告・ランキング
-import { $, $$, esc, toast, speak, dayKey } from "./util.js";
+import { $, $$, esc, toast, speak, dayKey, skel } from "./util.js";
 import { S, save } from "./store.js";
 import { rpc, fn, token, me, reasonText } from "./api.js";
 import { onEnter } from "./router.js";
@@ -65,7 +65,7 @@ onEnter("ranking", renderRanking);
 async function renderRanking() {
   const body = $("#rankBody");
   const tabs = `<div class="tabs" id="rkTabs">${KINDS.map(([k, t]) => `<button class="tab ${k === rankKind ? "on" : ""}" data-k="${k}">${t}</button>`).join("")}</div>`;
-  body.innerHTML = `<div class="card">${tabs}<div id="rkList" style="margin-top:12px"><span class="spinner"></span></div></div>`;
+  body.innerHTML = `<div class="card">${tabs}<div id="rkList" style="margin-top:12px"><ul class="pick">${skel("list", 6)}</ul></div></div>`;
   $("#rkTabs").onclick = (e) => { const b = e.target.closest("[data-k]"); if (b) { rankKind = b.dataset.k; renderRanking(); } };
   const r = await rpc("engdy_rank_list", { p_kind: rankKind, p_token: token() }).catch(() => null);
   const unit = KINDS.find((x) => x[0] === rankKind)[2];

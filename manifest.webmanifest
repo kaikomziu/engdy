@@ -43,10 +43,10 @@
   ],
   "shortcuts": [
     {
-      "name": "閲覧",
-      "short_name": "閲覧",
-      "description": "単語リストを見る",
-      "url": "./?go=browse",
+      "name": "続きから",
+      "short_name": "続きから",
+      "description": "途中の閲覧や、前回のリストをすぐ始める",
+      "url": "./?go=resume",
       "icons": [
         {
           "src": "icons/icon-192.png",
@@ -71,6 +71,18 @@
       "short_name": "メモ",
       "description": "手書きのノート",
       "url": "./?go=memo",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "さがす",
+      "short_name": "さがす",
+      "description": "単語・リスト・設定をさがす",
+      "url": "./?go=search",
       "icons": [
         {
           "src": "icons/icon-192.png",

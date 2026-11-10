@@ -1,7 +1,7 @@
 // 閲覧：単語 →（タップ or 数秒）→ 意味 →（タップ or 数秒）→ 次の単語
 // 放置対策：60秒操作がないと止める。画面が隠れている間・止まっている間の時間は記録しない
 // 操作：タップ / Space / → で進む、← で戻る、P で一時停止、スマホは右スワイプで次・左スワイプで戻る
-import { $, esc, fmtDuration, speak, toast } from "./util.js";
+import { $, esc, fmtDuration, speak, toast, skel } from "./util.js";
 import { S, save, today, wordRec } from "./store.js";
 import { go, onEnter, onLeave } from "./router.js";
 import { tone } from "./audio.js";
@@ -148,7 +148,7 @@ function closeExtra() { const el = $("#vExtra"); el.hidden = true; el.innerHTML 
 function openExtra(html) { if (!V) return; input(); setHold(true); const el = $("#vExtra"); el.hidden = false; el.innerHTML = html; }
 $("#vDef").onclick = async () => {
   if (!V) return; const x = V.words[V.i];
-  openExtra(`<span class="spinner"></span>`);
+  openExtra(skel("lines", 3));
   const defs = await defsOf(x.w);
   if (!V || V.words[V.i] !== x) return;
   openExtra(defs.length ? defs.map((d) => `<p><b class="pos">${esc(d.pos)}</b> ${esc(d.def)}${d.ex ? `<br><i class="note">“${esc(d.ex)}”</i>` : ""}</p>`).join("") + `<p class="note">Free Dictionary API</p>`
@@ -156,7 +156,7 @@ $("#vDef").onclick = async () => {
 };
 $("#vEx").onclick = async () => {
   if (!V) return; const x = V.words[V.i];
-  openExtra(`<span class="spinner"></span>`);
+  openExtra(skel("lines", 3));
   const ex = await examplesOf(x.w);
   if (!V || V.words[V.i] !== x) return;
   openExtra(ex.length ? ex.slice(0, 3).map((e, k) => `<p class="ex-row"><button class="link ex-say" data-k="${k}">🔊</button> ${esc(e.en)}<br><span class="note">${esc(e.ja)}</span></p>`).join("") + `<p class="note">例文：Tatoeba（CC BY 2.0 FR）</p>`

@@ -1,10 +1,10 @@
 // Engdy 本体：起動・ログイン・メイン画面・スタンプカード・設定・保護者メール・admin
-import { $, $$, esc, dayKey, fmtDuration, toast, modal, confirmBox, sleep } from "./util.js";
+import { $, $$, esc, dayKey, fmtDuration, toast, modal, confirmBox, sleep, skel } from "./util.js";
 import { S, save, onSave, today, agentProgress } from "./store.js";
 import { rpc, fn, token, me, reasonText } from "./api.js";
 import { go, onEnter, onLeave } from "./router.js";
 import { tone, bgm, refreshBgm, TRACKS, SCENES, sceneTrack, SFX_CATS, testSfx, previewTrack, stopPreview, previewing } from "./audio.js";
-import { applySkin, isDarkMode } from "./gacha.js";
+import { applySkin, isDarkMode, ACCENTS } from "./gacha.js";
 import { openShared, addSample, startLast, lastListName } from "./lists.js";
 import { loadLists, testPool } from "./store.js";
 import { resumeView } from "./view.js";
@@ -16,9 +16,10 @@ import "./memo.js";
 import { voices, say } from "./voice.js";
 import { renderQuote, notify, testDiscord, DISCORD_EVENTS, pushRank, leaveRank } from "./social.js";
 import { renderBoardAdmin, showRules } from "./board.js";
+import { renderTabbar, tabEditor, showGuide, openSearch } from "./ui.js";
 import { initPwa, install, canInstall, isStandalone, isIOS, onPwaChange, cacheMusic, musicCached, clearMusic, musicTotal } from "./pwa.js";
 
-export const VERSION = "1.15.0";
+export const VERSION = "1.16.0";
 export const STAMP_DIA = 30, CARD_BONUS = 100;
 
 // ================= スタンプカード =================
@@ -135,14 +136,8 @@ function renderInstall() {
 function welcome() {
   if (S.welcomed) return;
   S.welcomed = true; save();
-  modal(`<img class="ill" src="assets/ill/welcome.webp" alt="" loading="lazy" decoding="async"><p class="kicker">WELCOME</p><h3>Engdy へようこそ！</h3>
-    <ol class="steps">
-      <li><b>リストを作る</b><span>覚えたい単語を1行に1つ。サンプルも入っています。</span></li>
-      <li><b>閲覧する</b><span>単語 → 意味 の順に、数秒ずつ見ていきます。毎日1周でスタンプ。</span></li>
-      <li><b>テストする</b><span>見た単語を4択や書き取りで確かめます。</span></li>
-    </ol>
-    <p class="hint">ダイヤがたまったらガチャ、テストを続けると専属エージェントが使えるようになります。</p>
-    <div class="row" style="justify-content:flex-end"><button class="btn pri" data-close>はじめる</button></div>`);
+  // 何枚かのスライドで紹介する（設定の「アプリ・その他」から、いつでも見直せる）
+  showGuide();
 }
 
 // ================= 途中の閲覧を再開 =================
@@ -249,7 +244,14 @@ function enterApp() {
   // はじめての人には、サンプルの単語リストを入れておく
   if (!S.sampleAdded) { if (!loadLists().length) addSample(); S.sampleAdded = true; save(); }
   go("main");
-  if (pendingGo) { const g = pendingGo; pendingGo = null; go(g); return; }
+  if (pendingGo) {
+    const g = pendingGo; pendingGo = null;
+    // ホーム画面のアイコン長押し「続きから」：途中の閲覧 → 前回のリスト → リスト選び の順に試す
+    if (g === "resume") { if (S.resume && S.resume.words && S.resume.words.length) resumeView(); else if (!startLast()) go("browse"); }
+    else if (g === "search") openSearch();
+    else go(g);
+    return;
+  }
   if (!pendingShared) setTimeout(welcome, 400);
   if (pendingShared) { const c = pendingShared; pendingShared = null; openShared(c.code, null, c.key); }
 }
@@ -278,7 +280,8 @@ async function pushDaily() {
 
 // ================= 設定 =================
 let setTab = "study";   // 設定で最後に開いたタブ
-onEnter("settings", () => {
+onEnter("settings", (arg) => {
+  if (arg && arg.tab) setTab = arg.tab;   // 検索から開いたときは、そのタブを出す
   const st = S.settings;
   // 設定は、カテゴリごとのタブに分けて表示する（中身はすべて残し、見えないタブは隠すだけ）
   const SECS = [["study", "📚", "学習"], ["sound", "🔊", "音"], ["look", "🎨", "画面"], ["link", "🔗", "つながり"], ["app", "📲", "アプリ・その他"]];
@@ -332,9 +335,15 @@ onEnter("settings", () => {
     <div class="card"><h3 class="sec">🎨 画面</h3>
     <div class="set-row"><label>画面の明るさ<small>ガチャで当てたテーマの色は、どちらでも使えます</small></label>
       <div class="seg" id="setMode">${[["light", "☀️ ライト"], ["dark", "🌙 ダーク"], ["auto", "端末に合わせる"]].map(([v, t]) => `<button data-m="${v}" class="${(st.mode || "light") === v ? "on" : ""}">${t}</button>`).join("")}</div></div>
-    <div class="set-row"><label>文字の大きさ<small>閲覧とテストの単語・意味の大きさ</small></label><div class="seg" id="setFs">${[["s", "小"], ["m", "中"], ["l", "大"]].map(([v, t]) => `<button data-fs="${v}" class="${(st.fontSize || "m") === v ? "on" : ""}">${t}</button>`).join("")}</div></div>
+    <div class="set-row"><label>文字の大きさ<small>画面全体の文字と、閲覧・テストの単語の大きさ</small></label><div class="seg" id="setFs">${[["s", "小"], ["m", "中"], ["l", "大"], ["xl", "特大"]].map(([v, t]) => `<button data-fs="${v}" class="${(st.fontSize || "m") === v ? "on" : ""}">${t}</button>`).join("")}</div></div>
     <div class="set-row"><label>メイン画面に「今日の名言」を出す</label><input type="checkbox" id="setQuote" ${st.showQuote !== false ? "checked" : ""}></div>
+    <div class="set-row"><label>アクセントカラー<small>ボタンやリンクの色。テーマとは別に選べます</small></label></div>
+    <div class="accents" id="setAccentColor">${ACCENTS.map(([v, t]) => `<button data-ac="${v}" class="${(st.accentColor || "") === v ? "on" : ""}" title="${t}" aria-label="${t}" style="${v ? `--c:${v}` : ""}">${v ? "" : "テーマ"}</button>`).join("")}</div>
       <div class="set-row"><label>テーマ・背景<small>ガチャで当てた色や背景に着がえる</small></label><button class="btn sm" data-go="collection">図鑑・きせかえへ</button></div>
+    </div>
+    <div class="card"><h3 class="sec">📱 下のメニュー（スマホ）</h3>
+      <p class="hint">画面の下に出すボタンを、4つまで選んで並べられます（🏠 ホームは固定）。</p>
+      <div id="setTabbar"></div>
     </div>
   </div>
   <div class="set-pane" data-sp="link">
@@ -363,6 +372,7 @@ onEnter("settings", () => {
     <button class="btn danger ghost" id="resetAll">この端末の記録をすべて消す</button>
     </div>
     <div class="card"><h3 class="sec">ℹ️ その他</h3>
+      <div class="set-row"><label>使い方ガイド<small>はじめに出た紹介を、もう一度見る</small></label><button class="btn sm" id="setGuide">見る</button></div>
       <div class="set-row"><label>お問い合わせ<small>ご意見・不具合の報告は、掲示板の「質問」または、メール ${CONTACT_MAIL}（★→@）でも</small></label><button class="btn sm" id="setContact">開く</button></div>
       <div class="set-row"><label>ショートカット<small>キーボードで使えるキーの一覧（? キーでも開けます）</small></label><button class="btn sm" id="setKeys">見る</button></div>
       <div class="set-row"><label>更新履歴</label><button class="btn sm" data-go="changelog">見る</button></div>
@@ -377,6 +387,14 @@ onEnter("settings", () => {
   showSec();
   $("#setTabs").onclick = (e) => { const b = e.target.closest("[data-st]"); if (!b) return; setTab = b.dataset.st; showSec(); stopPreview(); scrollTo(0, 0); };
   $("#setKeys").onclick = showKeys;
+  $("#setGuide").onclick = showGuide;
+  tabEditor($("#setTabbar"));
+  // 色の設定（発音の「アクセント」= st.accent とは別のもの）
+  $("#setAccentColor").onclick = (e) => {
+    const b = e.target.closest("[data-ac]"); if (!b) return;
+    st.accentColor = b.dataset.ac || null; save(); applySkin(); tone("click");
+    $$("#setAccentColor button").forEach((x) => x.classList.toggle("on", x === b));
+  };
   $("#setContact").onclick = showContact;
   $("#setBoardRules").onclick = showRules;
   $("#setAcct").onclick = () => { if (window.KaAccount) (KaAccount.isLoggedIn() ? KaAccount.openPanel() : KaAccount.login("login")); };
@@ -516,7 +534,7 @@ async function renderParent() {
     $("#pmLogin").onclick = () => KaAccount.login("login");
     return;
   }
-  body.innerHTML = `<div class="card"><span class="spinner"></span> 読み込み中…</div>`;
+  body.innerHTML = `<div class="card">${skel("lines", 4)}</div>`;
   let r;
   try { r = await rpc("engdy_parent_get", { p_token: token() }); } catch (e) { r = null; }
   if (!r || !r.ok) { body.innerHTML = `<div class="card">${esc(reasonText(r && r.reason))}</div>`; return; }
@@ -654,6 +672,7 @@ async function renderAdmin() {
 async function boot() {
   applySkin();
   applyFontSize();
+  renderTabbar();
   // アプリとして使う仕組み（インストール・更新のお知らせ・オフライン）
   initPwa();
   onPwaChange(() => { if (document.querySelector("#s-main.active")) renderInstall(); if (document.querySelector("#s-settings.active")) renderAppCard(); });
@@ -674,7 +693,7 @@ async function boot() {
       : `<h3>認証できませんでした</h3><p>${r && r.reason === "expired" ? "リンクの期限（48時間）が切れています。学習する人のアプリの「保護者メール」から、確認メールをもう一度送ってください。" : "リンクが正しくないか、すでに認証が済んでいます。"}</p>`;
     setTimeout(() => modal(`<p class="kicker">PARENT MAIL</p>${msg}<div class="row" style="justify-content:flex-end"><button class="btn pri" data-close>OK</button></div>`), 300);
   }
-  const GO_OK = ["browse", "test", "memo", "stats", "create", "gacha"];
+  const GO_OK = ["browse", "test", "memo", "stats", "create", "gacha", "resume", "search", "board"];
   if (GO_OK.includes(q.get("go"))) { pendingGo = q.get("go"); history.replaceState(null, "", location.pathname); }
   if (q.get("list")) {
     const key = new URLSearchParams(location.hash.slice(1)).get("k");

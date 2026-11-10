@@ -1,5 +1,5 @@
 // テストモード：閲覧で見た単語から4択。苦手な単語ほど出やすい
-import { $, $$, esc, shuffle, speak } from "./util.js";
+import { $, $$, esc, shuffle, speak, skel } from "./util.js";
 import { S, save, today, testPool, agentProgress, UNLOCK } from "./store.js";
 import { go, onEnter, onLeave } from "./router.js";
 import { tone } from "./audio.js";
@@ -70,7 +70,7 @@ async function start(pool) {
 // ---- 例文の穴埋め（Tatoeba の例文を使う。AI なし） ----
 async function startExCloze(pool) {
   const picks = pickQuestions(pool.filter((x) => /^[a-z][a-z' -]*$/i.test(x.w)), Math.min(opt.n, 20));
-  $("#testBody").innerHTML = `<div class="card t-start"><p class="kicker">EXAMPLES</p><h3><span class="spinner"></span> 例文を集めています…</h3></div>`;
+  $("#testBody").innerHTML = `<div class="card"><p class="kicker">EXAMPLES</p><p class="hint">例文を集めています…</p>${skel("lines", 2)}<div class="q-time"></div>${skel("choices")}</div>`;
   const uniq = [...new Map(picks.map((x) => [x.w.toLowerCase(), x])).values()];
   const found = await Promise.all(uniq.map(async (x) => ({ x, ex: await examplesOf(x.w) })));
   if (!document.querySelector("#s-test.active")) return;
@@ -92,7 +92,7 @@ async function startExCloze(pool) {
 function showSpeak(q) {
   T.answered = false; T.right = q.w; T.t0 = performance.now();
   $("#testBody").innerHTML = `<div class="card">
-    <div class="q-head"><span>Q${T.i + 1} / ${T.qs.length}</span><span>${T.combo >= 2 ? `🔥 ${T.combo}連続` : ""}</span><span>${T.score}点</span></div>
+    ${qHead()}
     <div class="q-word">${esc(q.w)}</div><p class="cloze-ja">${esc(q.m)}</p>
     <div class="q-time"><i id="qTime"></i></div>
     <div style="text-align:center"><button class="btn pri big" style="max-width:280px" id="spGo">🎤 押して読む</button>
@@ -115,7 +115,7 @@ function showSpeak(q) {
 async function startCloze(pool) {
   if (!token()) { toast("穴埋め（AI）は、ログインすると使えます"); KaAccount.login("login"); return; }
   const picks = pickQuestions(pool, Math.min(10, opt.n));
-  $("#testBody").innerHTML = `<div class="card t-start"><p class="kicker">AI</p><h3><span class="spinner"></span> 問題を作っています…</h3><p class="hint">10秒ほどかかることがあります。</p></div>`;
+  $("#testBody").innerHTML = `<div class="card"><p class="kicker">AI</p><p class="hint">AI が問題を作っています…（10秒ほどかかることがあります）</p>${skel("lines", 2)}<div class="q-time"></div>${skel("choices")}</div>`;
   const r = await fn("cloze", { items: [...new Map(picks.map((x) => [x.w, { w: x.w, m: x.m }])).values()] });
   if (!document.querySelector("#s-test.active")) return;
   if (!r.ok || !r.items.length) { toast(reasonText(r.ok ? "parse" : r.reason), 3500); renderStart(); return; }
@@ -132,7 +132,7 @@ function showCloze(q) {
   T.answered = false; T.right = q.answer; T.t0 = performance.now();
   const sent = esc(q.sentence).replace("___", `<span class="blank">　？　</span>`);
   $("#testBody").innerHTML = `<div class="card">
-    <div class="q-head"><span>Q${T.i + 1} / ${T.qs.length}</span><span>${T.combo >= 2 ? `🔥 ${T.combo}連続` : ""}</span><span>${T.score}点</span></div>
+    ${qHead()}
     <div class="cloze-sent">${sent}</div>
     <div style="text-align:center"><button class="btn sm ghost" id="clJa">和訳を見る</button></div>
     <p class="cloze-ja" id="clJaText" hidden>${esc(q.ja)}</p>
@@ -166,7 +166,7 @@ function showTyping(q) {
   T.answered = false; T.right = q.w; T.t0 = performance.now();
   const hint = q.w.split(" ").map((p) => p[0] + "＿".repeat(Math.max(0, p.length - 1))).join("　");
   $("#testBody").innerHTML = `<div class="card">
-    <div class="q-head"><span>Q${T.i + 1} / ${T.qs.length}</span><span>${T.combo >= 2 ? `🔥 ${T.combo}連続` : ""}</span><span>${T.score}点</span></div>
+    ${qHead()}
     <div class="q-word ja">${esc(q.m)}</div>
     <p class="type-hint">${esc(hint)}（${q.w.replace(/ /g, "").length}文字）</p>
     <div class="q-time"><i id="qTime"></i></div>
@@ -191,7 +191,7 @@ function showQ() {
   const choices = shuffle([right, ...others]);
   T.answered = false; T.right = right; T.t0 = performance.now();
   $("#testBody").innerHTML = `<div class="card">
-    <div class="q-head"><span>Q${T.i + 1} / ${T.qs.length}</span><span>${T.combo >= 2 ? `🔥 ${T.combo}連続` : ""}</span><span>${T.score}点</span></div>
+    ${qHead()}
     <div class="q-word ${T.dir === "ja" ? "ja" : ""}">${esc(T.dir === "en" ? q.w : q.m)}</div>
     ${T.dir === "en" ? `<div style="text-align:center"><button class="btn sm ghost" id="qSpeak">🔊 発音</button></div>` : ""}
     <div class="q-time"><i id="qTime"></i></div>
@@ -201,6 +201,12 @@ function showQ() {
   if (T.dir === "en" && S.settings.autoSpeak) speak(q.w);
   $$(".choice").forEach((b) => (b.onclick = () => answer(b)));
   startTimer();
+}
+// 問題の上：何問目か・進み具合のバー・コンボ・点数
+function qHead() {
+  const pct = (T.i / T.qs.length) * 100;
+  return `<div class="q-head"><span>Q${T.i + 1} / ${T.qs.length}</span><span>${T.combo >= 2 ? `🔥 ${T.combo}連続` : ""}</span><span>${T.score}点</span></div>
+    <div class="q-prog" role="progressbar" aria-valuemin="0" aria-valuemax="${T.qs.length}" aria-valuenow="${T.i}"><i style="width:${pct}%"></i></div>`;
 }
 function startTimer() {
   clearInterval(T.timer);
@@ -234,6 +240,9 @@ function answer(btn, typed, heard) {
       : `❌ 正解は <b>${esc(q.w)}</b>`;
     speak(q.w);
   }
+  const qp = $(".q-prog i"); if (qp) qp.style.width = `${((T.i + 1) / T.qs.length) * 100}%`;
+  const card = $("#testBody .card"); if (card) { card.classList.remove("q-ok", "q-ng"); void card.offsetWidth; card.classList.add(ok ? "q-ok" : "q-ng"); }
+  if (ok) (T.okList = T.okList || []).push(q);
   const r = S.words[q.w];
   if (ok) {
     T.combo++; T.maxCombo = Math.max(T.maxCombo, T.combo); T.correct++;
@@ -268,17 +277,33 @@ function finish() {
   save(true);
   const rate = Math.round((T.correct / T.qs.length) * 100);
   const uniqWrong = [...new Map(T.wrong.map((x) => [x.w, x])).values()];
+  const wrongSet = new Set(uniqWrong.map((x) => x.w));
+  const uniqOk = [...new Map((T.okList || []).filter((x) => !wrongSet.has(x.w)).map((x) => [x.w, x])).values()];
   const p = agentProgress();
-  $("#testBody").innerHTML = `<div class="card t-start"><img class="ill" src="assets/ill/${rate >= 70 ? "test-good" : "test-bad"}.webp" alt=""><p class="kicker">RESULT</p>
+  const { pool, dir } = T;
+  const row = (x) => `<tr><td><button class="btn sm ghost" data-say="${esc(x.w)}" aria-label="発音を聞く">🔊</button></td><td><b>${esc(x.w)}</b></td><td>${esc(x.m)}</td></tr>`;
+  $("#testBody").innerHTML = `<div class="card t-start t-result"><img class="ill" src="assets/ill/${rate >= 70 ? "test-good" : "test-bad"}.webp" alt=""><p class="kicker">RESULT</p>
     <h3>${T.score}点 ${best ? `<span class="badge">ベスト更新</span>` : ""}</h3>
     <div class="done-stats"><div><small>正解</small><b>${T.correct} / ${T.qs.length}</b></div><div><small>正答率</small><b>${rate}%</b></div><div><small>最大コンボ</small><b>${T.maxCombo}</b></div></div>
-    ${uniqWrong.length ? `<h3 class="sec" style="text-align:left">まちがえた単語</h3><table class="wtable">${uniqWrong.map((x) => `<tr><td>${esc(x.w)}</td><td>${esc(x.m)}</td></tr>`).join("")}</table>` : `<div class="gain">全問正解！ 🎉</div>`}
-    ${p.ok ? `<p class="hint">専属エージェントで、苦手な単語を予習できます。</p>` : ""}
+    <div class="meter rate-meter" title="正答率 ${rate}%"><i style="width:${rate}%"></i></div>
+    ${uniqWrong.length ? `<div class="res-box ng"><div class="res-head"><b>❌ まちがえた単語 ${uniqWrong.length}語</b><span class="note">ここから すぐ復習できます</span></div>
+        <table class="wtable">${uniqWrong.map(row).join("")}</table>
+        <div class="row wrap res-acts"><button class="btn pri" id="tRetest">🔁 この単語だけテスト</button><button class="btn" id="tReview">📖 この単語だけ閲覧</button></div></div>`
+      : `<div class="gain">全問正解！ 🎉</div>`}
+    ${uniqOk.length ? `<details class="res-box ok"><summary><b>⭕ 正解した単語 ${uniqOk.length}語</b></summary><table class="wtable">${uniqOk.map(row).join("")}</table></details>` : ""}
+    ${p.ok && uniqWrong.length ? `<p class="hint">専属エージェントで、苦手な単語の覚え方を聞けます。 <button class="btn sm" data-go="agent">エージェントへ</button></p>` : ""}
     <div class="row wrap" style="justify-content:center;margin-top:16px">
-      ${uniqWrong.length ? `<button class="btn" id="tReview">まちがえた単語を閲覧</button>` : ""}
       <button class="btn" id="tAgain">もう一度</button>
-      <button class="btn pri" data-go="main">メインへ</button></div></div>`;
+      <button class="btn ${uniqWrong.length ? "" : "pri"}" data-go="main">メインへ</button></div></div>`;
+  $("#testBody").querySelectorAll("[data-say]").forEach((b) => (b.onclick = () => speak(b.dataset.say)));
   const rv = $("#tReview"); if (rv) rv.onclick = () => startList({ title: "テストの復習", words: uniqWrong.map((x) => ({ w: x.w, m: x.m })) });
+  // まちがえた単語だけで、もう一度テスト（AI の穴埋めは、ふつうの4択にする）
+  const rt = $("#tRetest");
+  if (rt) rt.onclick = () => {
+    const d = dir === "cloze" ? "en" : dir;
+    T = { pool, qs: shuffle(uniqWrong), i: 0, score: 0, combo: 0, maxCombo: 0, correct: 0, wrong: [], dir: d, timer: 0, t0: 0, answered: false };
+    tone("click"); showQ();
+  };
   $("#tAgain").onclick = renderStart;
   T = null;
 }

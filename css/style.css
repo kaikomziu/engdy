@@ -334,7 +334,9 @@ html[data-fs="l"]{--fscale:1.25}
 .vctrl .btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .list-tools{display:flex;gap:6px;margin-bottom:10px}
 .list-tools input{padding:7px 10px;font-size:13px;min-width:0}
-.list-tools select{padding:7px 8px;font-size:13px}
+.list-tools select{padding:7px 8px;font-size:13px;min-width:0;max-width:46%}
+.list-tools{flex-wrap:wrap}
+.list-tools input.grow{flex:1 1 140px}
 .resume{border-left:4px solid var(--accent)}
 .goal{flex-basis:100%;border-top:1px solid var(--line);padding-top:12px;display:grid;gap:6px}
 .goal-head{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
@@ -595,3 +597,179 @@ html[data-mode="dark"] .spell .miss{background:rgba(220,90,70,.25)}
 .modal-card .ill{width:110px;height:110px}
 html[data-mode="dark"] .ill,html[data-mode="dark"] .mi-ill,html[data-mode="dark"] .login-ill{filter:brightness(.92)}
 @media (max-width:420px){.mi-ill{width:38px;height:38px}.login-ill{width:120px}}
+
+/* ================= v1.16 UI の改善 ================= */
+/* 画面の切り替え：進むときは右から、戻るときは左から */
+.screen.in-fwd{animation:inFwd .28s cubic-bezier(.2,.7,.3,1)}
+.screen.in-back{animation:inBack .28s cubic-bezier(.2,.7,.3,1)}
+@keyframes inFwd{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
+@keyframes inBack{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:none}}
+
+/* どこでも検索 */
+.gsearch{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;border:1px solid var(--line);background:var(--paper);border-radius:999px;color:var(--sub);font-size:14px;text-align:left;box-shadow:var(--shadow);transition:border-color .15s}
+.gsearch:hover{border-color:var(--accent)}
+.gs-in{width:100%;font-size:16px}
+.gs-res{margin-top:10px;max-height:min(52vh,440px);overflow:auto;display:grid;gap:2px;align-content:start}
+.gs-g{margin:10px 0 2px;font:600 11px/1.4 var(--mono);letter-spacing:.2em;color:var(--accent)}
+.gs-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:1px solid transparent;border-radius:10px;padding:8px 10px;min-height:48px}
+.gs-item:hover,.gs-item.on{background:var(--accent-soft)}
+.gs-item.on{border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+.gs-ic{font-size:18px;width:24px;text-align:center;flex:none}
+.gs-t{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.35}
+.gs-t b,.gs-t small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gs-t small{color:var(--sub);font-size:12px}
+.gs-say{padding:8px 10px;border-radius:8px;flex:none}
+.gs-say:hover{background:var(--paper)}
+
+/* 下のメニューの編集 */
+.tab-edit{list-style:none;margin:6px 0;padding:0;display:grid;gap:6px;counter-reset:te}
+.tab-edit li{display:flex;align-items:center;gap:10px;padding:4px 4px 4px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.tab-edit li::before{counter-increment:te;content:counter(te);font:600 11px var(--mono);color:var(--sub);width:12px}
+.te-ic{font-size:20px}
+.tab-edit b{flex:1;font-size:14px}
+.te-ops{display:flex;gap:2px}
+.te-add{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.te-add .chip{max-width:none}
+.te-add .chip:disabled{opacity:.4;cursor:default}
+
+/* アクセントカラー */
+.accents{display:flex;flex-wrap:wrap;gap:10px;margin:2px 0 14px}
+.accents button{width:38px;height:38px;border-radius:50%;border:2px solid var(--paper);box-shadow:0 0 0 1px var(--line);background:var(--c,var(--paper));padding:0;font-size:11px;font-weight:700;color:var(--sub)}
+.accents button:first-child{width:auto;padding:0 12px;border-radius:999px}
+.accents button.on{box-shadow:0 0 0 2px var(--paper),0 0 0 4px var(--ink)}
+
+/* 文字の大きさ：画面全体（メモは手書きの位置がずれる・閲覧は画面いっぱいの配置がくずれるので対象外。閲覧の単語は --fscale で大きくなる） */
+html[data-fs="s"]{--fscale:.88}
+html[data-fs="l"]{--fscale:1.15}
+html[data-fs="xl"]{--fscale:1.3}
+html[data-fs="s"] .screen:not(#s-memo):not(#s-view),html[data-fs="s"] .modal-card>*{zoom:.92}
+html[data-fs="l"] .screen:not(#s-memo):not(#s-view),html[data-fs="l"] .modal-card>*{zoom:1.08}
+html[data-fs="xl"] .screen:not(#s-memo):not(#s-view),html[data-fs="xl"] .modal-card>*{zoom:1.16}
+
+/* テスト：進み具合・手ごたえ */
+.q-prog{height:6px;background:var(--line);border-radius:6px;overflow:hidden;margin:8px 0 0}
+.q-prog i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 55%,#fff));border-radius:6px;transition:width .45s ease}
+.q-time{height:3px;opacity:.7}
+.choice.ok{animation:okPop .4s ease}
+.choice.ok::after{content:"✓";margin-left:auto;font-weight:800;font-size:20px;color:#2f8f5e;animation:checkIn .4s cubic-bezier(.3,1.6,.5,1)}
+.choice.ng{animation:shake .4s}
+.choice.ng::after{content:"✕";margin-left:auto;font-weight:800;font-size:18px;color:var(--warn)}
+@keyframes okPop{40%{transform:scale(1.035)}}
+@keyframes checkIn{from{transform:scale(0) rotate(-40deg);opacity:0}to{transform:none;opacity:1}}
+.card.q-ok{box-shadow:0 0 0 3px color-mix(in srgb,#2f8f5e 40%,transparent),var(--shadow);transition:box-shadow .2s}
+.card.q-ng{box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 40%,transparent),var(--shadow);transition:box-shadow .2s}
+.card.q-ng .q-word,.card.q-ng .cloze-sent,.card.q-ng .type-row{animation:shake .4s}
+.card.q-ok .q-word{animation:okPop .4s ease}
+
+/* テストの結果 */
+.rate-meter{height:8px;margin:14px auto 0;max-width:320px}
+.rate-meter i{background:var(--accent);transition:width .8s ease}
+.res-box{text-align:left;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:14px}
+.res-box.ng{border-color:color-mix(in srgb,var(--warn) 35%,var(--line));background:color-mix(in srgb,var(--warn) 5%,var(--paper))}
+.res-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.res-acts{margin-top:10px}
+.res-box summary{cursor:pointer;padding:4px 0}
+.t-result .wtable td:first-child{width:44px;padding:2px}
+
+/* リストのカード */
+.pick.lgrid{grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px}
+.pick li.lcard{gap:12px;padding:12px;border-radius:14px;background:var(--paper);cursor:pointer;transition:transform .12s,box-shadow .15s,border-color .15s}
+.lcard:hover,.lcard:focus-visible{border-color:var(--accent);box-shadow:var(--shadow);transform:translateY(-1px);outline:none}
+.lc-cover{position:relative;flex:none;width:50px;height:62px;border-radius:6px 12px 12px 6px;background:linear-gradient(135deg,hsl(var(--h) 42% 55%),hsl(calc(var(--h) + 28) 48% 40%));display:grid;place-items:center;color:#fff;font:800 22px var(--serif);box-shadow:inset 5px 0 0 rgba(0,0,0,.14)}
+.lc-pub{position:absolute;right:-6px;top:-6px;font-style:normal;font-size:13px}
+.lc-body{flex:1;min-width:0}
+.lc-body b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick li small.lc-tags{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+.lt{font-size:11px;line-height:1.6;padding:0 7px;border-radius:999px;background:var(--line);color:var(--sub);font-weight:600}
+.lt.ok{background:color-mix(in srgb,#2f8f5e 16%,var(--paper));color:#2f7a52}
+.lt.ng{background:color-mix(in srgb,var(--warn) 14%,var(--paper));color:var(--warn)}
+html[data-mode="dark"] .lt.ok{color:#6fcf9a}
+.lc-side{display:flex;flex-direction:column;align-items:center;gap:2px;flex:none}
+.ring{width:46px;height:46px;border-radius:50%;background:conic-gradient(var(--accent) calc(var(--p) * 1%),var(--line) 0);display:grid;place-items:center}
+.ring span{width:36px;height:36px;border-radius:50%;background:var(--paper);display:flex;align-items:center;justify-content:center;font:700 12px/1 var(--mono)}
+.ring small{font-size:8px}
+.lc-edit{padding:2px 8px}
+
+/* 表のその場編集 */
+.pv-hint{margin:12px 0 4px}
+.pv-edit td[contenteditable]{cursor:text;border-radius:6px;outline:none;transition:background .12s}
+.pv-edit td[contenteditable]:hover{background:var(--accent-soft)}
+.pv-edit td[contenteditable]:focus{background:var(--paper);box-shadow:inset 0 0 0 2px var(--accent)}
+.pv-edit td[contenteditable]:empty::before{content:attr(data-ph);color:var(--sub);opacity:.7}
+.pv-edit td.miss:not(:empty){color:var(--ink)}
+.pv-del{width:40px;text-align:right}
+.pv-del .btn{opacity:.35;padding:2px 8px}
+.pv-edit tr:hover .pv-del .btn,.pv-del .btn:focus{opacity:1}
+.pv-new td[data-k="w"]:empty::before{color:var(--accent);opacity:1}
+
+/* 読み込み中の仮の表示 */
+.sk{display:block;height:12px;border-radius:6px;background:linear-gradient(90deg,var(--line) 0%,color-mix(in srgb,var(--line) 35%,var(--paper)) 50%,var(--line) 100%);background-size:200% 100%;animation:skShine 1.2s linear infinite}
+@keyframes skShine{from{background-position:100% 0}to{background-position:-100% 0}}
+.sk-lines{display:grid;gap:10px;padding:6px 0}
+.pick li.sk-row,.sk-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;list-style:none}
+.sk-ic{width:36px;height:36px;border-radius:10px;flex:none}
+.sk-col{flex:1;display:grid;gap:8px}
+.sk-s{height:9px}
+.sk-btn{height:54px;border-radius:12px}
+.sk-msg{display:grid;gap:8px;min-width:min(260px,70vw)}
+
+/* はじめてのガイド */
+.guide{text-align:center}
+.gd-slide{min-height:290px}
+.gd-slide.from-r{animation:inFwd .3s ease}
+.gd-slide.from-l{animation:inBack .3s ease}
+.gd-slide h3{margin:4px 0 8px}
+.gd-slide p:last-child{color:var(--sub);line-height:1.8}
+.gd-dots{display:flex;justify-content:center;gap:2px;margin:6px 0 10px}
+.gd-dots button{width:8px;height:8px;box-sizing:content-box;border:8px solid transparent;background:var(--line);background-clip:content-box;border-radius:50%;padding:0;transition:width .2s}
+.gd-dots button.on{background-color:var(--accent);width:22px;border-radius:12px}
+
+/* 機能の解放のお知らせ（画面の中央に出す） */
+.modal.center{display:grid;place-items:center;padding:16px}
+.modal.center .modal-card{width:min(400px,100%);max-height:90vh;border-radius:20px;padding:26px 22px 20px;animation:unlockIn .5s cubic-bezier(.3,1.4,.5,1)}
+.modal.center .modal-card::before{display:none}
+.modal.center .modal-card>.row:last-child{position:static;margin:16px 0 0;padding:0;border:none;background:none}
+.unlock{text-align:center;position:relative;isolation:isolate}
+.unlock h3{font-size:20px}
+.ul-ic{font-size:64px;line-height:1;margin:8px 0 12px;animation:ulBounce .9s ease .15s both}
+.ul-burst{position:absolute;left:50%;top:40px;width:190px;height:190px;margin:-95px 0 0 -95px;border-radius:50%;background:repeating-conic-gradient(color-mix(in srgb,var(--accent) 30%,transparent) 0 9deg,transparent 9deg 30deg);-webkit-mask:radial-gradient(circle,#000 25%,transparent 70%);mask:radial-gradient(circle,#000 25%,transparent 70%);animation:spin2 10s linear infinite;z-index:-1}
+@keyframes unlockIn{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+@keyframes ulBounce{0%{transform:scale(0)}55%{transform:scale(1.25)}75%{transform:scale(.92)}100%{transform:scale(1)}}
+
+/* スマホ：押しやすさ・キーボード */
+@media (max-width:760px){
+  .btn,.tab,.qlink{min-height:44px}
+  .btn.sm{min-height:44px;padding:8px 14px;font-size:13px}
+  .seg button{min-height:40px}
+  .chip{min-height:40px}
+  .link{min-height:40px}
+  .set-row input[type=checkbox]{width:24px;height:24px}
+  #s-memo .btn,.memo-pages .btn,.pv-del .btn,.lc-edit{min-height:0}
+  .te-ops .btn{min-width:40px;min-height:40px;padding:4px}
+  .gsearch kbd{display:none}
+  .gsearch{padding:13px 16px;font-size:15px}
+  .pick.lgrid{grid-template-columns:1fr}
+  /* キーボードが出ている間：下のメニューを隠し、シートを見えている高さに合わせる */
+  body.kb-open #tabbar{display:none}
+  .modal{top:var(--vvt,0px);bottom:auto;height:var(--vvh,100%)}
+}
+@media (max-width:760px){.list-tools input.grow{flex-basis:100%}.list-tools select{flex:1;max-width:none}}
+/* 画面がすべって入る間に、ページが横に広がらないようにする（clip はスクロールの箱を作らないので、上のバーの固定も崩れない） */
+@supports (overflow-x:clip){html,body{overflow-x:clip}}
+/* 設定の行：右側（切りかえボタンなど）が入りきらないときは、下の段に回す（文字を大きくしたときに縦書きにならないように） */
+.set-row{flex-wrap:wrap}
+.set-row>label{flex:1 1 180px;min-width:0}
+.seg button{white-space:nowrap}
+.set-row>.seg{flex-wrap:wrap;max-width:100%}
+/* 切りかえボタンの列：入りきらないときは折り返す */
+.seg{flex-wrap:wrap;max-width:100%;justify-content:center;border-radius:20px;row-gap:2px}
+/* タブの列：入りきらないときは横にスクロール */
+.tabs{overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:none;white-space:nowrap}
+/* 長いタイトルや名前で、カードや列が画面より広がらないようにする */
+.page>*,.main-body>*{min-width:0}
+.pick.lgrid{grid-template-columns:repeat(auto-fill,minmax(min(270px,100%),1fr))}
+@media (max-width:760px){.pick.lgrid{grid-template-columns:minmax(0,1fr)}}
+.brand{white-space:nowrap}
+@media (max-width:760px){html[data-fs="l"] .brand small,html[data-fs="xl"] .brand small{display:none}}

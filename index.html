@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Engdy">
-<link rel="stylesheet" href="css/style.css?v=1.15.0">
+<link rel="stylesheet" href="css/style.css?v=1.16.0">
 <script src="https://kaikomziu.github.io/game-links/js/karuwaka-account.js" data-game="engdy" data-keys="engdy_v1,engdy_lists,engdy_memo" data-badge="off"></script>
 </head>
 <body>
@@ -46,6 +46,7 @@
     </div>
   </header>
   <main class="main-body">
+    <button class="gsearch" data-gsearch><span aria-hidden="true">🔍</span><span class="grow">単語・リスト・メモ・設定をさがす</span><kbd>/</kbd></button>
     <div class="today card" id="todayCard"></div>
     <div class="card resume" id="resumeCard" hidden></div>
     <div class="card next" id="nextCard" hidden></div>
@@ -84,7 +85,7 @@
   <div class="page two-col">
     <aside class="card side">
       <div class="side-head"><b>自分のリスト</b><button class="btn sm" id="newList">＋ 新しく作る</button></div>
-      <div class="list-tools"><input id="mySearch" placeholder="検索" class="grow"><select id="mySort" class="list-sort"></select></div>
+      <div class="list-tools"><input id="mySearch" placeholder="検索" class="grow"><select id="mySort" class="list-sort" aria-label="並べ替え"></select><select id="myFilter" class="list-filter" aria-label="絞り込み"></select></div>
       <ul class="mylist" id="myLists"></ul>
       <div class="side-foot">
         <button class="btn sm" id="importFile">ファイルを読み込む</button>
@@ -124,7 +125,7 @@
       <button class="tab" data-tab="public">みんなのリスト</button>
       <button class="tab" data-tab="code">URL・コード</button>
     </div>
-    <div class="card tabpane" data-pane="mine"><div class="list-tools"><input id="pickSearch" placeholder="リスト名や単語で検索" class="grow"><select id="pickSort" class="list-sort"></select></div><ul class="pick" id="pickMine"></ul></div>
+    <div class="card tabpane" data-pane="mine"><div class="list-tools"><input id="pickSearch" placeholder="リスト名や単語で検索" class="grow"><select id="pickSort" class="list-sort" aria-label="並べ替え"></select><select id="pickFilter" class="list-filter" aria-label="絞り込み"></select></div><ul class="pick lgrid" id="pickMine"></ul></div>
     <div class="card tabpane" data-pane="public" hidden>
       <div class="row"><input id="pubSearch" placeholder="タイトルで検索" class="grow"><button class="btn" id="pubReload">検索</button></div>
       <ul class="pick" id="pickPublic"></ul>
@@ -270,7 +271,7 @@
         <dt>BGM</dt><dd>ふぁいの音楽置き場（fai-musics）<br>「ほっこりひととき」「静かな図書室で」「おひるすぎ」「黄昏メロウノート」「なんだっけ？」「ゆううつ雨模様」<br>MusMus（watson）「ひとやすみ」「Lightning Brain」<br>DOVA-SYNDROME しゃろう「2:23 AM」</dd>
       </dl>
       <p class="hint">お問い合わせ：掲示板の「質問」、またはメール karubiwakame★gmail.com（★→@）でも受け付けています。</p>
-      <p class="hint">バージョン <span class="ver">v1.15.0</span></p>
+      <p class="hint">バージョン <span class="ver">v1.16.0</span></p>
     </div>
   </div>
 </section>
@@ -311,7 +312,7 @@
 <div id="modal" class="modal" hidden><div class="modal-card card" id="modalCard"></div></div>
 <div id="toast" class="toast" hidden></div>
 
-<script type="importmap">{"imports":{"./js/agent.js":"./js/agent.js?v=1.15.0","./js/api.js":"./js/api.js?v=1.15.0","./js/app.js":"./js/app.js?v=1.15.0","./js/audio.js":"./js/audio.js?v=1.15.0","./js/changelog.js":"./js/changelog.js?v=1.15.0","./js/crypto.js":"./js/crypto.js?v=1.15.0","./js/gacha.js":"./js/gacha.js?v=1.15.0","./js/items.js":"./js/items.js?v=1.15.0","./js/lists.js":"./js/lists.js?v=1.15.0","./js/router.js":"./js/router.js?v=1.15.0","./js/stats.js":"./js/stats.js?v=1.15.0","./js/store.js":"./js/store.js?v=1.15.0","./js/test.js":"./js/test.js?v=1.15.0","./js/util.js":"./js/util.js?v=1.15.0","./js/view.js":"./js/view.js?v=1.15.0","./js/memo.js":"./js/memo.js?v=1.15.0","./js/sample.js":"./js/sample.js?v=1.15.0","./js/pwa.js":"./js/pwa.js?v=1.15.0","./js/voice.js":"./js/voice.js?v=1.15.0","./js/speech.js":"./js/speech.js?v=1.15.0","./js/social.js":"./js/social.js?v=1.15.0","./js/board.js":"./js/board.js?v=1.15.0"}}</script>
-<script type="module" src="js/app.js?v=1.15.0"></script>
+<script type="importmap">{"imports":{"./js/agent.js":"./js/agent.js?v=1.16.0","./js/api.js":"./js/api.js?v=1.16.0","./js/app.js":"./js/app.js?v=1.16.0","./js/audio.js":"./js/audio.js?v=1.16.0","./js/changelog.js":"./js/changelog.js?v=1.16.0","./js/crypto.js":"./js/crypto.js?v=1.16.0","./js/gacha.js":"./js/gacha.js?v=1.16.0","./js/items.js":"./js/items.js?v=1.16.0","./js/lists.js":"./js/lists.js?v=1.16.0","./js/router.js":"./js/router.js?v=1.16.0","./js/stats.js":"./js/stats.js?v=1.16.0","./js/store.js":"./js/store.js?v=1.16.0","./js/test.js":"./js/test.js?v=1.16.0","./js/util.js":"./js/util.js?v=1.16.0","./js/view.js":"./js/view.js?v=1.16.0","./js/memo.js":"./js/memo.js?v=1.16.0","./js/sample.js":"./js/sample.js?v=1.16.0","./js/pwa.js":"./js/pwa.js?v=1.16.0","./js/voice.js":"./js/voice.js?v=1.16.0","./js/speech.js":"./js/speech.js?v=1.16.0","./js/social.js":"./js/social.js?v=1.16.0","./js/board.js":"./js/board.js?v=1.16.0","./js/ui.js":"./js/ui.js?v=1.16.0"}}</script>
+<script type="module" src="js/app.js?v=1.16.0"></script>
 </body>
 </html>

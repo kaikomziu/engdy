@@ -14,12 +14,18 @@ let current = "", pushed = false, ignorePop = false;
 export const onEnter = (name, f) => (hooks[name] = f);
 export const onLeave = (name, f) => (leaves[name] = f);
 export const onBack = (f) => backs.push(f);
+const anys = [];       // どの画面に入っても呼ぶ関数
+export const onAnyEnter = (f) => anys.push(f);
 export const currentScreen = () => current;
 
 export function go(name, arg, opt = {}) {
   if (current && leaves[current]) { try { leaves[current](); } catch (e) { console.error(e); } }
-  $$(".screen").forEach((s) => s.classList.toggle("active", s.id === "s-" + name));
   const from = current;
+  // 進むときは右から、戻るときは左から入ってくる
+  const dir = !from || from === name ? "" : opt.fromPop || ROOTS.includes(name) ? "in-back" : "in-fwd";
+  $$(".screen").forEach((s) => { s.classList.toggle("active", s.id === "s-" + name); s.classList.remove("in-fwd", "in-back"); });
+  const el = $("#s-" + name);
+  if (el && dir) { void el.offsetWidth; el.classList.add(dir); }
   current = name;
   document.body.dataset.screen = name;
   $$("#tabbar [data-go]").forEach((b) => b.classList.toggle("on", b.dataset.go === name));
@@ -37,6 +43,7 @@ export function go(name, arg, opt = {}) {
   scrollTo(0, 0);
   if (MUSIC[name] !== undefined) bgm(MUSIC[name]);
   if (hooks[name]) { try { hooks[name](arg); } catch (e) { console.error(e); } }
+  anys.forEach((f) => { try { f(name); } catch (e) { console.error(e); } });
 }
 
 addEventListener("popstate", () => {
